@@ -68,7 +68,7 @@ describe('IlinkClient', () => {
       get_updates_buf: 'previous',
       base_info: {
         channel_version: '2.4.6',
-        bot_agent: 'SecondBrain/3.2.0',
+        bot_agent: 'SecondBrain/3.3.0',
       },
     });
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret');

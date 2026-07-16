@@ -12,7 +12,7 @@ import {
 
 const ILINK_APP_ID = 'bot';
 const ILINK_CLIENT_VERSION = (2 << 16) | (4 << 8) | 6;
-const BOT_AGENT = 'SecondBrain/3.2.0';
+const BOT_AGENT = 'SecondBrain/3.3.0';
 
 interface RequestOptions {
   baseUrl: string;

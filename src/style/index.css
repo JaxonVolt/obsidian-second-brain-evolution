@@ -48,6 +48,7 @@
 @import "./modals/fork-target.css";
 @import "./modals/inbox-routing.css";
 @import "./modals/wechat-connect.css";
+@import "./modals/onboarding.css";
 
 /* Settings */
 @import "./settings/base.css";

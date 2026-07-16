@@ -18,6 +18,13 @@ export class SecondBrainSettingTab extends PluginSettingTab {
 
     new Setting(container).setName('第二大脑设置').setHeading();
     new Setting(container)
+      .setName('知识库骨架')
+      .setDesc('检查并补建通用目录、入口和模板；已有文件不会被覆盖。')
+      .addButton((button) => button
+        .setButtonText('检查与初始化')
+        .onClick(() => this.secondBrainPlugin.openKnowledgeInitializer()));
+
+    new Setting(container)
       .setName('运行引擎')
       .setDesc('固定使用本机 Codex CLI，不会调用其他智能引擎。')
       .addText((text) => text.setValue('Codex').setDisabled(true));

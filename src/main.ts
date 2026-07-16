@@ -13,6 +13,7 @@ import type { AgentManager } from './core/agents';
 import { InboxCaptureService } from './core/knowledge/InboxCaptureService';
 import { InboxDigestService } from './core/knowledge/InboxDigestService';
 import { ensureKnowledgeRuntime } from './core/knowledge/KnowledgeRuntime';
+import { SecondBrainInitializer } from './core/knowledge/SecondBrainInitializer';
 import { WeChatChannelService } from './core/wechat/WeChatChannelService';
 import { McpServerManager } from './core/mcp';
 import type { PluginManager } from './core/plugins';
@@ -40,6 +41,7 @@ import {
 } from './core/types';
 import { ClaudianView } from './features/chat/ClaudianView';
 import { InboxDigestModal } from './features/inbox/InboxDigestModal';
+import { SecondBrainOnboardingModal } from './features/onboarding/SecondBrainOnboardingModal';
 import { SecondBrainSettingTab } from './features/settings/SecondBrainSettings';
 import { WeChatConnectModal } from './features/wechat/WeChatConnectModal';
 import { setLocale } from './i18n';
@@ -69,11 +71,13 @@ export default class ClaudianPlugin extends Plugin {
   private conversations: Conversation[] = [];
   private runtimeEnvironmentVariables = '';
   private inboxCaptureService: InboxCaptureService;
+  private knowledgeInitializer: SecondBrainInitializer;
   weChatService: WeChatChannelService;
 
   async onload() {
     await this.loadSettings();
     await ensureKnowledgeRuntime(this.app);
+    this.knowledgeInitializer = new SecondBrainInitializer(this.app);
     this.inboxCaptureService = new InboxCaptureService(this.app);
     this.weChatService = new WeChatChannelService(this);
 
@@ -123,6 +127,12 @@ export default class ClaudianPlugin extends Plugin {
       id: 'capture-to-inbox',
       name: '将输入存入收件箱',
       callback: () => { void this.focusCaptureInput(); },
+    });
+
+    this.addCommand({
+      id: 'initialize-second-brain',
+      name: '初始化或补全第二大脑骨架',
+      callback: () => this.openKnowledgeInitializer(),
     });
 
     this.addCommand({
@@ -206,6 +216,7 @@ export default class ClaudianPlugin extends Plugin {
     });
 
     this.addSettingTab(new SecondBrainSettingTab(this.app, this));
+    this.app.workspace.onLayoutReady(() => { void this.maybeShowKnowledgeInitializer(); });
     if (this.settings.wechatAutoStart) await this.weChatService.start();
   }
 
@@ -280,6 +291,16 @@ export default class ClaudianPlugin extends Plugin {
 
   openInboxDigest(): void {
     new InboxDigestModal(this.app, new InboxDigestService(this.app, this)).open();
+  }
+
+  openKnowledgeInitializer(): void {
+    new SecondBrainOnboardingModal(this.app, this.knowledgeInitializer, 'manual').open();
+  }
+
+  private async maybeShowKnowledgeInitializer(): Promise<void> {
+    if (await this.knowledgeInitializer.getStatus() !== 'pending') return;
+    if (await this.knowledgeInitializer.markCompletedIfReady()) return;
+    new SecondBrainOnboardingModal(this.app, this.knowledgeInitializer, 'first-run').open();
   }
 
   async openTodayNote(): Promise<void> {

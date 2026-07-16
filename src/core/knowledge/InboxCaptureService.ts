@@ -1,6 +1,8 @@
 import type { App } from 'obsidian';
 
-export const RAW_INBOX_DIR = '010_收件箱/原始输入_raw';
+import { SECOND_BRAIN_PATHS } from './SecondBrainInitializer';
+
+export const RAW_INBOX_DIR = SECOND_BRAIN_PATHS.rawInbox;
 
 export interface InboxCaptureOptions {
   source?: string;

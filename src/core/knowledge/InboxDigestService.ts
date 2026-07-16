@@ -8,6 +8,7 @@ import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
 import { CODEX_PERFORMANCE_PROFILES } from '../types';
 import { RAW_INBOX_DIR, formatLocalTimestamp } from './InboxCaptureService';
+import { SECOND_BRAIN_PATHS } from './SecondBrainInitializer';
 
 export type RoutingCategory =
   | 'daily'
@@ -325,11 +326,11 @@ export class InboxDigestService {
     manifest: Array<{ action: 'create' | 'append'; path: string; before?: string }>,
   ): Promise<{ action: 'create' | 'append'; path: string }> {
     if (proposal.category === 'daily') {
-      const path = `300 _ 个人内燃机/310_每日行为日志/${dateStamp(now)}.md`;
+      const path = `${SECOND_BRAIN_PATHS.dailyNotes}/${dateStamp(now)}.md`;
       return this.appendToNote(path, `\n\n## 收件箱归位\n\n${proposal.content}\n\n> 来源：[[${proposal.sourcePath.replace(/\.md$/i, '')}]]\n`, manifest);
     }
     if (proposal.category === 'next-action') {
-      const path = '020_行动系统/下一步行动.md';
+      const path = SECOND_BRAIN_PATHS.nextActions;
       return this.appendToNote(path, `\n- [ ] ${proposal.content.replace(/\r?\n/g, ' ')}  ^inbox-${Date.now()}\n`, manifest);
     }
 
@@ -345,12 +346,12 @@ export class InboxDigestService {
 
   private getDestinationFolder(category: Exclude<RoutingCategory, 'daily' | 'next-action'>, title: string): string {
     switch (category) {
-      case 'reflection': return '300 _ 个人内燃机/320_心智复盘与树洞';
-      case 'project': return `020_行动系统/活跃项目/${title}`;
-      case 'source': return '010_收件箱/来源资料_sources';
-      case 'permanent': return '500_永久笔记与知识资产';
-      case 'output': return '600_输出与作品';
-      case 'archive': return '700_归档/已转化材料';
+      case 'reflection': return SECOND_BRAIN_PATHS.reflections;
+      case 'project': return `${SECOND_BRAIN_PATHS.activeProjects}/${title}`;
+      case 'source': return SECOND_BRAIN_PATHS.sourceInbox;
+      case 'permanent': return SECOND_BRAIN_PATHS.permanentNotes;
+      case 'output': return SECOND_BRAIN_PATHS.outputs;
+      case 'archive': return SECOND_BRAIN_PATHS.archive;
       case 'inbox': return RAW_INBOX_DIR;
     }
   }
