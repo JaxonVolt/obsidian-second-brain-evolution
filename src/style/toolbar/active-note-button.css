@@ -1,0 +1,39 @@
+.claudian-active-note-button {
+  display: flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.claudian-active-note-button-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.claudian-active-note-button-icon:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.claudian-active-note-button-icon:active {
+  transform: translateY(0.5px);
+}
+
+.claudian-active-note-button-icon:focus-visible {
+  outline: 2px solid rgba(var(--claudian-brand-rgb), 0.35);
+  outline-offset: 1px;
+}
+
+.claudian-active-note-button-icon svg {
+  width: 16px;
+  height: 16px;
+}

@@ -1,0 +1,9 @@
+{
+  "id": "second-brain-evolution",
+  "name": "第二大脑 · 知识演化",
+  "version": "3.2.0",
+  "minAppVersion": "1.8.9",
+  "description": "基于本机 Codex 的中文个人知识演化系统：微信远程收集、人工确认分流、今日笔记、问库与复盘。",
+  "author": "shanheju29259-spec",
+  "isDesktopOnly": true
+}
