@@ -1,8 +1,10 @@
 import {
   buildCodexRuntimeProfile,
+  CUSTOM_PROVIDER_API_KEY_ENV,
   extractModelIds,
   getConfiguredModel,
   getModelProviderModelsEndpoint,
+  getModelProviderRuntimeEnvironment,
 } from '@/core/model';
 import type { ClaudianSettings } from '@/core/types';
 
@@ -11,6 +13,7 @@ function settings(overrides: Partial<ClaudianSettings> = {}): ClaudianSettings {
     codexModelProvider: 'codex',
     codexProviderApiKeyEnvVar: '',
     codexProviderBaseUrl: '',
+    codexProviderSecretId: '',
     codexProviderDeepModel: '',
     codexProviderFastModel: '',
     codexProviderSupportsReasoning: false,
@@ -67,6 +70,32 @@ describe('CodexModelProvider', () => {
     ]));
     expect(profile.rootArgs.join(' ')).not.toContain('secret');
     expect(profile.execConfigArgs).toContain('model_reasoning_effort="medium"');
+  });
+
+  it('injects a securely stored API key only into the child process environment', () => {
+    const secureSettings = settings({
+      codexModelProvider: 'custom',
+      codexProviderBaseUrl: 'https://models.example.com/v1',
+      codexProviderSecretId: 'second-brain-model-key',
+      codexProviderFastModel: 'my-model',
+    });
+    const profile = buildCodexRuntimeProfile(secureSettings, 'fast');
+    const runtimeEnv = getModelProviderRuntimeEnvironment(secureSettings, {
+      getSecret: (id) => id === 'second-brain-model-key' ? 'private-api-key' : null,
+    });
+
+    expect(profile.rootArgs).toContain(
+      `model_providers.second_brain_custom.env_key="${CUSTOM_PROVIDER_API_KEY_ENV}"`,
+    );
+    expect(profile.rootArgs.join(' ')).not.toContain('private-api-key');
+    expect(runtimeEnv).toEqual({ [CUSTOM_PROVIDER_API_KEY_ENV]: 'private-api-key' });
+  });
+
+  it('reports a missing selected secret before launching the model process', () => {
+    expect(() => getModelProviderRuntimeEnvironment(settings({
+      codexModelProvider: 'custom',
+      codexProviderSecretId: 'missing-key',
+    }), { getSecret: () => null })).toThrow('未找到已选择的 API 密钥');
   });
 
   it('rejects unsafe custom URLs and malformed environment variable names', () => {

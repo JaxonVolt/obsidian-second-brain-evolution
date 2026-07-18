@@ -51,6 +51,7 @@ export interface CodexToolbarSettings extends BaseToolbarSettings {
   codexModelProvider: CodexModelProvider;
   codexProviderApiKeyEnvVar: string;
   codexProviderBaseUrl: string;
+  codexProviderSecretId: string;
   codexProviderDeepModel: string;
   codexProviderFastModel: string;
   codexProviderSupportsReasoning: boolean;

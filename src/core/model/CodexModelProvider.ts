@@ -8,6 +8,7 @@ import { CODEX_PERFORMANCE_PROFILES } from '../types';
 
 const CUSTOM_PROVIDER_ID = 'second_brain_custom';
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const CUSTOM_PROVIDER_API_KEY_ENV = 'SECOND_BRAIN_MODEL_API_KEY';
 
 export const CODEX_MODEL_PROVIDER_LABELS: Record<CodexModelProvider, string> = {
   codex: 'Codex 账户',
@@ -29,6 +30,7 @@ type ModelProviderSettings = Pick<ClaudianSettings,
   | 'codexModelProvider'
   | 'codexProviderApiKeyEnvVar'
   | 'codexProviderBaseUrl'
+  | 'codexProviderSecretId'
   | 'codexProviderDeepModel'
   | 'codexProviderFastModel'
   | 'codexProviderSupportsReasoning'
@@ -55,7 +57,7 @@ function normalizeCustomBaseUrl(value: string): string {
     throw new Error('模型服务地址只允许使用 http:// 或 https://。');
   }
   if (parsed.username || parsed.password) {
-    throw new Error('不要把密钥写进模型服务地址，请使用环境变量。');
+    throw new Error('不要把密钥写进模型服务地址，请使用下方的 API 密钥。');
   }
   return trimmed;
 }
@@ -96,7 +98,9 @@ export function buildCodexRuntimeProfile(
     rootArgs.push('--oss', '-c', `oss_provider=${quoteToml(provider)}`);
   } else if (provider === 'custom') {
     const baseUrl = normalizeCustomBaseUrl(settings.codexProviderBaseUrl ?? '');
-    const envKey = settings.codexProviderApiKeyEnvVar?.trim() ?? '';
+    const secretId = settings.codexProviderSecretId?.trim() ?? '';
+    const legacyEnvKey = settings.codexProviderApiKeyEnvVar?.trim() ?? '';
+    const envKey = secretId ? CUSTOM_PROVIDER_API_KEY_ENV : legacyEnvKey;
     if (envKey && !ENV_KEY_PATTERN.test(envKey)) {
       throw new Error('API 密钥环境变量名格式无效，例如应填写 OPENAI_API_KEY。');
     }
@@ -128,6 +132,22 @@ export function buildCodexRuntimeProfile(
     rootArgs,
     execConfigArgs,
   };
+}
+
+export function getModelProviderRuntimeEnvironment(
+  settings: ModelProviderSettings,
+  secretStorage?: { getSecret(id: string): string | null },
+): Record<string, string> {
+  if ((settings.codexModelProvider ?? 'codex') !== 'custom') return {};
+
+  const secretId = settings.codexProviderSecretId?.trim() ?? '';
+  if (!secretId) return {};
+
+  const apiKey = secretStorage?.getSecret(secretId);
+  if (!apiKey) {
+    throw new Error('未找到已选择的 API 密钥，请在插件设置中重新选择或新建。');
+  }
+  return { [CUSTOM_PROVIDER_API_KEY_ENV]: apiKey };
 }
 
 export function getModelProviderModelsEndpoint(settings: ModelProviderSettings): string | null {

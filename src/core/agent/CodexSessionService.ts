@@ -14,7 +14,7 @@ import { getVaultPath } from '../../utils/path';
 import { buildContextFromHistory, buildPromptWithHistoryContext } from '../../utils/session';
 import { getCodexCommandsForDropdown, getKnowledgeCommandsForDropdown } from '../commands';
 import type { McpServerManager } from '../mcp';
-import { buildCodexRuntimeProfile } from '../model';
+import { buildCodexRuntimeProfile, getModelProviderRuntimeEnvironment } from '../model';
 import type { TodoItem } from '../tools';
 import { TOOL_TODO_WRITE } from '../tools/toolNames';
 import {
@@ -380,10 +380,15 @@ export class CodexSessionService implements AgentSessionService {
     } = options;
 
     const customEnv = parseEnvironmentVariables(this.plugin.getActiveEnvironmentVariables());
+    const providerEnv = getModelProviderRuntimeEnvironment(
+      this.plugin.settings,
+      this.plugin.app.secretStorage,
+    );
     const enhancedPath = getEnhancedPath(customEnv.PATH, codexPath);
     const env = {
       ...process.env,
       ...customEnv,
+      ...providerEnv,
       PATH: enhancedPath,
     };
 

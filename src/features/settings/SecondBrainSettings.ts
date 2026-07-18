@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import type { App } from 'obsidian';
-import { Notice, PluginSettingTab, requestUrl, Setting } from 'obsidian';
+import { Notice, PluginSettingTab, requestUrl, SecretComponent, Setting } from 'obsidian';
 
 import {
   CODEX_MODEL_PROVIDER_LABELS,
@@ -116,8 +116,18 @@ export class SecondBrainSettingTab extends PluginSettingTab {
           }));
 
       new Setting(container)
-        .setName('API 密钥环境变量')
-        .setDesc('填写变量名而不是密钥，例如 OPENAI_API_KEY。留空表示接口不需要鉴权。')
+        .setName('API 密钥')
+        .setDesc('点击右侧直接新建或选择密钥。密钥由 Obsidian 安全保存，不会写入插件配置或命令参数。')
+        .addComponent((controlEl) => new SecretComponent(this.app, controlEl)
+          .setValue(settings.codexProviderSecretId ?? '')
+          .onChange(async (value) => {
+            settings.codexProviderSecretId = value;
+            await this.secondBrainPlugin.saveSettings();
+          }));
+
+      new Setting(container)
+        .setName('旧版环境变量（可选）')
+        .setDesc('仅在未选择上方 API 密钥时使用。可填写 OPENAI_API_KEY 等变量名；通常无需设置。')
         .addText((text) => text
           .setPlaceholder('OPENAI_API_KEY')
           .setValue(settings.codexProviderApiKeyEnvVar ?? '')
@@ -233,8 +243,13 @@ export class SecondBrainSettingTab extends PluginSettingTab {
       const endpoint = getModelProviderModelsEndpoint(settings);
       if (!endpoint) throw new Error('无法确定模型服务地址。');
       const headers: Record<string, string> = {};
+      const secretId = settings.codexProviderSecretId?.trim() ?? '';
       const envKey = settings.codexProviderApiKeyEnvVar?.trim() ?? '';
-      if (envKey) {
+      if (secretId) {
+        const apiKey = this.app.secretStorage.getSecret(secretId);
+        if (!apiKey) throw new Error('未找到已选择的 API 密钥，请重新选择或新建。');
+        headers.Authorization = `Bearer ${apiKey}`;
+      } else if (envKey) {
         const configuredEnv = parseEnvironmentVariables(this.secondBrainPlugin.getActiveEnvironmentVariables());
         const apiKey = configuredEnv[envKey] || process.env[envKey];
         if (!apiKey) throw new Error(`未找到环境变量 ${envKey}，请先在系统中设置 API 密钥。`);

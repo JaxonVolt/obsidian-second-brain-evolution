@@ -6,7 +6,7 @@ import type { App } from 'obsidian';
 import type SecondBrainPlugin from '../../main';
 import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
-import { buildCodexRuntimeProfile } from '../model';
+import { buildCodexRuntimeProfile, getModelProviderRuntimeEnvironment } from '../model';
 import { RAW_INBOX_DIR, formatLocalTimestamp } from './InboxCaptureService';
 import { SECOND_BRAIN_PATHS } from './SecondBrainInitializer';
 
@@ -268,7 +268,16 @@ export class InboxDigestService {
 
     const runtimeProfile = buildCodexRuntimeProfile(this.plugin.settings, 'fast');
     const customEnv = parseEnvironmentVariables(this.plugin.getActiveEnvironmentVariables());
-    const env = { ...process.env, ...customEnv, PATH: getEnhancedPath(customEnv.PATH, codexPath) };
+    const providerEnv = getModelProviderRuntimeEnvironment(
+      this.plugin.settings,
+      this.app.secretStorage,
+    );
+    const env = {
+      ...process.env,
+      ...customEnv,
+      ...providerEnv,
+      PATH: getEnhancedPath(customEnv.PATH, codexPath),
+    };
     const args = [
       ...runtimeProfile.rootArgs,
       '-s', 'read-only', '-C', vaultPath,

@@ -299,6 +299,7 @@ export interface ClaudianSettings {
   codexPerformanceMode?: CodexPerformanceMode;
   codexModelProvider?: CodexModelProvider;
   codexProviderBaseUrl?: string;
+  codexProviderSecretId?: string;
   codexProviderApiKeyEnvVar?: string;
   codexProviderFastModel?: string;
   codexProviderDeepModel?: string;
@@ -384,6 +385,7 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   codexPerformanceMode: 'fast',
   codexModelProvider: 'codex',
   codexProviderBaseUrl: '',
+  codexProviderSecretId: '',
   codexProviderApiKeyEnvVar: '',
   codexProviderFastModel: '',
   codexProviderDeepModel: '',

@@ -2,7 +2,7 @@
 
 一个面向 Obsidian 桌面端的中文知识演化插件。它以本机 Codex CLI 为智能体执行层，可连接 Codex 账户、Ollama、LM Studio 或任意兼容 OpenAI Responses API 的模型服务，把快速收集、人工确认分流、今日笔记、知识库问答、复盘和微信远程收集集中到一个侧边栏中。
 
-> 当前公开版本：`3.4.0`
+> 当前公开版本：`3.5.0`
 
 ## 核心能力
 
@@ -16,7 +16,7 @@
 
 ## 运行要求
 
-- Obsidian `1.8.9` 或更高版本
+- Obsidian `1.11.5` 或更高版本
 - Windows、macOS 或 Linux 桌面端
 - 已安装 [Codex CLI](https://developers.openai.com/codex/cli/)；使用 Codex 账户时还需完成登录
 - 使用本地模型时，需先启动 Ollama 或 LM Studio 并下载模型
@@ -51,7 +51,7 @@ styles.css
 
 ## 模型提供商
 
-默认仍使用 Codex 账户，不改变旧版本行为。需要本地运行时，可在“设置 → 第二大脑 → 模型与推理”选择 Ollama 或 LM Studio，填写快速模型和可选的深度模型，然后点击“测试连接”。远程或自建服务请选择“自定义 Responses API”，密钥只填写环境变量名，不直接保存在插件设置中。
+默认仍使用 Codex 账户，不改变旧版本行为。需要本地运行时，可在“设置 → 第二大脑 → 模型与推理”选择 Ollama 或 LM Studio，填写快速模型和可选的深度模型，然后点击“测试连接”。远程或自建服务请选择“自定义 Responses API”，可在同一设置页直接新建或选择 API 密钥；真实密钥由 Obsidian 密钥库保存，不写入插件普通配置。
 
 模型接入与完整智能体能力不是一回事：模型服务必须支持流式 Responses API；要可靠完成问库、分流和文件操作，模型还应支持工具调用并具备足够上下文。详细步骤、费用和兼容性见 [模型接入指南](docs/MODEL_PROVIDERS.md)。
 

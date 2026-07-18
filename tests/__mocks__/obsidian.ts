@@ -96,6 +96,13 @@ export class Setting {
   setDesc = jest.fn().mockReturnThis();
   addToggle = jest.fn().mockReturnThis();
   addTextArea = jest.fn().mockReturnThis();
+  addComponent = jest.fn().mockReturnThis();
+}
+
+export class SecretComponent {
+  constructor(_app: any, _containerEl: any) {}
+  setValue = jest.fn().mockReturnThis();
+  onChange = jest.fn().mockReturnThis();
 }
 
 export class TextAreaComponent {

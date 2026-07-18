@@ -624,6 +624,7 @@ function buildToolbarSettings(tab: TabData, plugin: ClaudianPlugin) {
       codexModelProvider: plugin.settings.codexModelProvider ?? 'codex',
       codexProviderApiKeyEnvVar: plugin.settings.codexProviderApiKeyEnvVar ?? '',
       codexProviderBaseUrl: plugin.settings.codexProviderBaseUrl ?? '',
+      codexProviderSecretId: plugin.settings.codexProviderSecretId ?? '',
       codexProviderDeepModel: plugin.settings.codexProviderDeepModel ?? '',
       codexProviderFastModel: plugin.settings.codexProviderFastModel ?? '',
       codexProviderSupportsReasoning: plugin.settings.codexProviderSupportsReasoning ?? false,

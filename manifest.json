@@ -1,8 +1,8 @@
 {
   "id": "second-brain-evolution",
   "name": "第二大脑 · 知识演化",
-  "version": "3.4.0",
-  "minAppVersion": "1.8.9",
+  "version": "3.5.0",
+  "minAppVersion": "1.11.5",
   "description": "支持 Codex、本地模型和自定义接口的中文知识演化系统：收集、确认分流、今日笔记、问库与复盘。",
   "author": "shanheju29259-spec",
   "isDesktopOnly": true
