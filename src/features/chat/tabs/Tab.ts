@@ -20,6 +20,7 @@ import {
   type SlashCommand,
   type ThinkingBudget,
 } from '../../../core/types';
+import { getConfiguredModel } from '../../../core/model';
 import { t } from '../../../i18n';
 import type ClaudianPlugin from '../../../main';
 import { SlashCommandDropdown } from '../../../shared/components/SlashCommandDropdown';
@@ -497,13 +498,19 @@ function initializeInputToolbar(tab: TabData, plugin: ClaudianPlugin): void {
     onCodexPerformanceModeChange: async (mode) => {
       const profile = CODEX_PERFORMANCE_PROFILES[mode];
       plugin.settings.codexPerformanceMode = mode;
-      plugin.settings.codexModel = profile.model;
-      plugin.settings.codexModelOptions = [
-        CODEX_PERFORMANCE_PROFILES.fast.model,
-        CODEX_PERFORMANCE_PROFILES.deep.model,
-      ];
-      plugin.settings.codexReasoningEffort = profile.reasoningEffort;
-      plugin.settings.codexPlanModeReasoningEffort = profile.reasoningEffort;
+      try {
+        const fast = getConfiguredModel(plugin.settings, 'fast');
+        const deep = getConfiguredModel(plugin.settings, 'deep');
+        plugin.settings.codexModel = getConfiguredModel(plugin.settings, mode);
+        plugin.settings.codexModelOptions = [...new Set([fast, deep])];
+      } catch {
+        plugin.settings.codexModel = '';
+        plugin.settings.codexModelOptions = [];
+      }
+      const supportsReasoning = (plugin.settings.codexModelProvider ?? 'codex') === 'codex'
+        || plugin.settings.codexProviderSupportsReasoning;
+      plugin.settings.codexReasoningEffort = supportsReasoning ? profile.reasoningEffort : '';
+      plugin.settings.codexPlanModeReasoningEffort = supportsReasoning ? profile.reasoningEffort : '';
       await plugin.saveSettings();
       updateTabBackendUI(tab, plugin);
     },
@@ -614,6 +621,12 @@ function buildToolbarSettings(tab: TabData, plugin: ClaudianPlugin) {
       backendId,
       model: plugin.settings.codexModel?.trim() ?? '',
       codexPerformanceMode: plugin.settings.codexPerformanceMode ?? 'fast',
+      codexModelProvider: plugin.settings.codexModelProvider ?? 'codex',
+      codexProviderApiKeyEnvVar: plugin.settings.codexProviderApiKeyEnvVar ?? '',
+      codexProviderBaseUrl: plugin.settings.codexProviderBaseUrl ?? '',
+      codexProviderDeepModel: plugin.settings.codexProviderDeepModel ?? '',
+      codexProviderFastModel: plugin.settings.codexProviderFastModel ?? '',
+      codexProviderSupportsReasoning: plugin.settings.codexProviderSupportsReasoning ?? false,
       modelOptions: buildCodexModelOptions(plugin),
       codexReasoningEffort: plugin.settings.codexReasoningEffort ?? '',
       codexPlanModeReasoningEffort: plugin.settings.codexPlanModeReasoningEffort ?? '',

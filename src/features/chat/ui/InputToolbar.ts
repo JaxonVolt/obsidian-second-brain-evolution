@@ -2,10 +2,12 @@ import { Notice, setIcon } from 'obsidian';
 import * as path from 'path';
 
 import type { McpServerManager } from '../../../core/mcp';
+import { CODEX_MODEL_PROVIDER_LABELS, getConfiguredModel } from '../../../core/model';
 import type {
   BackendId,
   ClaudeModel,
   ClaudianMcpServer,
+  CodexModelProvider,
   CodexPerformanceMode,
   CodexPlanModeReasoningEffort,
   CodexReasoningEffort,
@@ -46,6 +48,12 @@ export interface ClaudeToolbarSettings extends BaseToolbarSettings {
 
 export interface CodexToolbarSettings extends BaseToolbarSettings {
   backendId: 'codex';
+  codexModelProvider: CodexModelProvider;
+  codexProviderApiKeyEnvVar: string;
+  codexProviderBaseUrl: string;
+  codexProviderDeepModel: string;
+  codexProviderFastModel: string;
+  codexProviderSupportsReasoning: boolean;
   codexPerformanceMode?: CodexPerformanceMode;
   codexReasoningEffort: CodexReasoningEffort;
   codexPlanModeReasoningEffort: CodexPlanModeReasoningEffort;
@@ -225,12 +233,19 @@ export class CodexModelSelector implements ToolbarModelSelectorLike {
 
     for (const mode of ['fast', 'deep'] as const) {
       const profile = CODEX_PERFORMANCE_PROFILES[mode];
+      let model: string = profile.model;
+      try {
+        model = getConfiguredModel(this.callbacks.getSettings() as CodexToolbarSettings, mode);
+      } catch {
+        model = '待配置';
+      }
       const buttonEl = this.container.createEl('button', {
         cls: 'claudian-performance-option',
         text: profile.label,
       }) as HTMLButtonElement;
       buttonEl.setAttribute('type', 'button');
-      buttonEl.setAttribute('title', `${profile.description} ${profile.model} / ${profile.reasoningEffort}`);
+      const provider = (this.callbacks.getSettings() as CodexToolbarSettings).codexModelProvider ?? 'codex';
+      buttonEl.setAttribute('title', `${profile.description} ${CODEX_MODEL_PROVIDER_LABELS[provider]} · ${model}`);
       buttonEl.setAttribute('aria-pressed', mode === currentMode ? 'true' : 'false');
       buttonEl.toggleClass('is-active', mode === currentMode);
       buttonEl.addEventListener('click', async (event) => {

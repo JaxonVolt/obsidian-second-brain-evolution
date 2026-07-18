@@ -124,6 +124,7 @@ export type PermissionMode = 'yolo' | 'plan' | 'normal';
 export type CodexReasoningEffort = '' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexPlanModeReasoningEffort = '' | 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
 export type CodexPerformanceMode = 'fast' | 'deep';
+export type CodexModelProvider = 'codex' | 'ollama' | 'lmstudio' | 'custom';
 
 export const CODEX_PERFORMANCE_PROFILES = {
   fast: {
@@ -296,6 +297,12 @@ export interface ClaudianSettings {
   // Model & thinking (Claudian uses enum, CC uses full model ID string)
   model: ClaudeModel;
   codexPerformanceMode?: CodexPerformanceMode;
+  codexModelProvider?: CodexModelProvider;
+  codexProviderBaseUrl?: string;
+  codexProviderApiKeyEnvVar?: string;
+  codexProviderFastModel?: string;
+  codexProviderDeepModel?: string;
+  codexProviderSupportsReasoning?: boolean;
   codexModel?: string;
   codexModelOptions?: string[];
   codexReasoningEffort?: CodexReasoningEffort;
@@ -375,6 +382,12 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   // Model & thinking
   model: 'haiku',
   codexPerformanceMode: 'fast',
+  codexModelProvider: 'codex',
+  codexProviderBaseUrl: '',
+  codexProviderApiKeyEnvVar: '',
+  codexProviderFastModel: '',
+  codexProviderDeepModel: '',
+  codexProviderSupportsReasoning: false,
   codexModel: CODEX_PERFORMANCE_PROFILES.fast.model,
   codexModelOptions: [
     CODEX_PERFORMANCE_PROFILES.fast.model,

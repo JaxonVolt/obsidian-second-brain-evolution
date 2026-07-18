@@ -14,13 +14,13 @@ import { getVaultPath } from '../../utils/path';
 import { buildContextFromHistory, buildPromptWithHistoryContext } from '../../utils/session';
 import { getCodexCommandsForDropdown, getKnowledgeCommandsForDropdown } from '../commands';
 import type { McpServerManager } from '../mcp';
+import { buildCodexRuntimeProfile } from '../model';
 import type { TodoItem } from '../tools';
 import { TOOL_TODO_WRITE } from '../tools/toolNames';
 import {
   BACKEND_CODEX,
   type BackendCapabilities,
   type ChatMessage,
-  CODEX_PERFORMANCE_PROFILES,
   type Conversation,
   type ExitPlanModeCallback,
   getBackendCapabilities,
@@ -578,8 +578,15 @@ export class CodexSessionService implements AgentSessionService {
   }): string[] {
     const { codexPath, imagePaths, permissionMode, queryOptions, resumeSessionId, vaultPath } = options;
     const capabilities = detectCodexCliCapabilities(codexPath);
+    const performanceMode = this.plugin.settings.codexPerformanceMode ?? 'fast';
+    const runtimeProfile = buildCodexRuntimeProfile(
+      this.plugin.settings,
+      performanceMode,
+      queryOptions?.model?.trim(),
+    );
     const args = [
       ...this.buildCodexGlobalArgs(permissionMode, vaultPath, capabilities.approvalFlagScope),
+      ...runtimeProfile.rootArgs,
       'exec',
       ...this.buildCodexExecApprovalArgs(capabilities.approvalFlagScope),
     ];
@@ -602,23 +609,7 @@ export class CodexSessionService implements AgentSessionService {
       args.push('--image', imagePath);
     }
 
-    const performanceMode = this.plugin.settings.codexPerformanceMode ?? 'fast';
-    const performanceProfile = CODEX_PERFORMANCE_PROFILES[performanceMode];
-    const requestedModel = queryOptions?.model?.trim();
-    const effectiveModel = requestedModel || performanceProfile.model;
-    if (effectiveModel) {
-      args.push('--model', effectiveModel);
-    }
-
-    const reasoningEffort = performanceProfile.reasoningEffort;
-    if (reasoningEffort) {
-      args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
-    }
-
-    const planReasoningEffort = performanceProfile.reasoningEffort;
-    if (planReasoningEffort) {
-      args.push('-c', `plan_mode_reasoning_effort="${planReasoningEffort}"`);
-    }
+    args.push('--model', runtimeProfile.model, ...runtimeProfile.execConfigArgs);
 
     args.push('--skip-git-repo-check', '--json');
 

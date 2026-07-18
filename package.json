@@ -1,7 +1,7 @@
 {
   "name": "obsidian-second-brain-evolution",
-  "version": "3.3.0",
-  "description": "Codex-only knowledge evolution system for Obsidian",
+  "version": "3.4.0",
+  "description": "Multi-provider knowledge evolution system for Obsidian, orchestrated by Codex CLI",
   "main": "main.js",
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
@@ -12,7 +12,7 @@
     "lint": "eslint \"{src,tests}/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix",
     "test": "npm run test:core",
-    "test:core": "node scripts/run-jest.js --runInBand tests/unit/core/knowledge/SecondBrainInitializer.test.ts tests/unit/core/knowledge/InboxDigestService.test.ts tests/unit/core/knowledge/InboxCaptureService.test.ts tests/unit/core/commands/knowledgeCommands.test.ts tests/unit/core/wechat/WeChatStateStore.test.ts tests/unit/core/wechat/WeChatMediaService.test.ts tests/unit/core/wechat/WeChatDigestCommands.test.ts tests/unit/core/wechat/WeChatChannelService.test.ts tests/unit/core/wechat/IlinkClient.test.ts",
+    "test:core": "node scripts/run-jest.js --runInBand tests/unit/core/model/CodexModelProvider.test.ts tests/unit/core/agent/CodexSessionService.test.ts tests/unit/core/knowledge/SecondBrainInitializer.test.ts tests/unit/core/knowledge/InboxDigestService.test.ts tests/unit/core/knowledge/InboxCaptureService.test.ts tests/unit/core/commands/knowledgeCommands.test.ts tests/unit/core/wechat/WeChatStateStore.test.ts tests/unit/core/wechat/WeChatMediaService.test.ts tests/unit/core/wechat/WeChatDigestCommands.test.ts tests/unit/core/wechat/WeChatChannelService.test.ts tests/unit/core/wechat/IlinkClient.test.ts",
     "test:all": "node scripts/run-jest.js",
     "test:watch": "node scripts/run-jest.js --watch",
     "test:coverage": "node scripts/run-jest.js --coverage",
@@ -20,6 +20,9 @@
   },
   "keywords": [
     "codex",
+    "ollama",
+    "lm-studio",
+    "local-models",
     "obsidian",
     "obsidian-plugin",
     "productivity",

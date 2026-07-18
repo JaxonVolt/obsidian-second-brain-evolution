@@ -55,6 +55,7 @@ export {
   CODEX_PERFORMANCE_PROFILES,
   CODEX_PLAN_REASONING_EFFORTS,
   CODEX_REASONING_EFFORTS,
+  type CodexModelProvider,
   type CodexPerformanceMode,
   type CodexPlanModeReasoningEffort,
   type CodexReasoningEffort,

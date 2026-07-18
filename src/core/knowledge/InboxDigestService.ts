@@ -6,7 +6,7 @@ import type { App } from 'obsidian';
 import type SecondBrainPlugin from '../../main';
 import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
-import { CODEX_PERFORMANCE_PROFILES } from '../types';
+import { buildCodexRuntimeProfile } from '../model';
 import { RAW_INBOX_DIR, formatLocalTimestamp } from './InboxCaptureService';
 import { SECOND_BRAIN_PATHS } from './SecondBrainInitializer';
 
@@ -266,13 +266,14 @@ export class InboxDigestService {
       throw new Error('未找到 Codex CLI，请先在插件设置中确认运行路径。');
     }
 
-    const profile = CODEX_PERFORMANCE_PROFILES.fast;
+    const runtimeProfile = buildCodexRuntimeProfile(this.plugin.settings, 'fast');
     const customEnv = parseEnvironmentVariables(this.plugin.getActiveEnvironmentVariables());
     const env = { ...process.env, ...customEnv, PATH: getEnhancedPath(customEnv.PATH, codexPath) };
     const args = [
+      ...runtimeProfile.rootArgs,
       '-s', 'read-only', '-C', vaultPath,
-      'exec', '--model', profile.model,
-      '-c', `model_reasoning_effort="${profile.reasoningEffort}"`,
+      'exec', '--model', runtimeProfile.model,
+      ...runtimeProfile.execConfigArgs,
       '--skip-git-repo-check', '--json', '-',
     ];
 

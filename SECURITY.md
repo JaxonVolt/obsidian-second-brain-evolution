@@ -13,11 +13,12 @@
 
 ## 支持范围
 
-当前维护版本为 `3.2.x`。安全修复优先进入最新版本。
+当前维护版本为 `3.4.x`。安全修复优先进入最新版本。
 
 ## 用户侧保护
 
 - 只从本仓库 Releases 获取构建文件。
 - 不要公开 `.obsidian/plugins/second-brain-evolution/data.json`。
 - 定期更新 Obsidian、Codex CLI 和插件。
+- 自定义模型密钥只通过系统环境变量提供，不要写入 URL、笔记或公开 Issue。
 - 在确认分流结果前，不要批量写入长期笔记。
