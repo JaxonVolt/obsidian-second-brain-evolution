@@ -3,10 +3,18 @@ import { Notice } from 'obsidian';
 
 import { InputController, type InputControllerDeps } from '@/features/chat/controllers/InputController';
 import { ChatState } from '@/features/chat/state/ChatState';
+import { CustomInstructionsModal } from '@/features/settings/CustomInstructionsModal';
 import { ResumeSessionDropdown } from '@/shared/components/ResumeSessionDropdown';
 
 jest.mock('@/shared/components/ResumeSessionDropdown', () => ({
   ResumeSessionDropdown: jest.fn(),
+}));
+
+jest.mock('@/features/settings/CustomInstructionsModal', () => ({
+  MAX_CUSTOM_INSTRUCTIONS_LENGTH: 20_000,
+  CustomInstructionsModal: jest.fn().mockImplementation(() => ({
+    open: jest.fn(),
+  })),
 }));
 
 beforeAll(() => {
@@ -108,6 +116,9 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       mcpManager: {
         extractMentions: jest.fn().mockReturnValue(new Set()),
         transformMentions: jest.fn().mockImplementation((text: string) => text),
+      },
+      llmWikiService: {
+        buildContext: jest.fn().mockResolvedValue(''),
       },
       renameConversation: jest.fn(),
       updateConversation: jest.fn(),
@@ -559,7 +570,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('/hidden-skill cannot be invoked directly.');
+      expect(mockNotice).toHaveBeenCalledWith('/hidden-skill 不能被直接调用。');
       expect(mockAgentService.query).not.toHaveBeenCalled();
       expect(inputEl.value).toBe('/hidden-skill');
     });
@@ -975,7 +986,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('External context selector not available.');
+      expect(mockNotice).toHaveBeenCalledWith('外部资料选择器当前不可用。');
       expect(inputEl.value).toBe('');
     });
 
@@ -1107,7 +1118,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('No conversations to resume');
+      expect(mockNotice).toHaveBeenCalledWith('没有可继续的对话。');
       expect(ResumeSessionDropdown).not.toHaveBeenCalled();
       expect(inputEl.value).toBe('');
     });
@@ -1235,7 +1246,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('Fork not available.');
+      expect(mockNotice).toHaveBeenCalledWith('当前对话不支持分叉。');
       expect(inputEl.value).toBe('');
     });
   });
@@ -1310,7 +1321,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('Failed to initialize agent service. Please try again.');
+      expect(mockNotice).toHaveBeenCalledWith('Codex 初始化失败，请重试。');
       expect(deps.streamController.hideThinkingIndicator).toHaveBeenCalled();
       expect(deps.state.isStreaming).toBe(false);
       expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
@@ -1333,7 +1344,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.sendMessage();
 
-      expect(mockNotice).toHaveBeenCalledWith('Agent service not available. Please reload the plugin.');
+      expect(mockNotice).toHaveBeenCalledWith('Codex 服务不可用，请重新加载插件。');
       expect((deps as any).mockAgentService.query).not.toHaveBeenCalled();
     });
   });
@@ -1392,7 +1403,7 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('已中断')
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);
@@ -1417,7 +1428,7 @@ describe('InputController - Message Queue', () => {
       await controller.sendMessage();
 
       expect(deps.streamController.appendText).toHaveBeenCalledWith(
-        expect.stringContaining('Interrupted')
+        expect.stringContaining('已中断')
       );
       expect(deps.state.isStreaming).toBe(false);
       expect(deps.state.cancelRequested).toBe(false);
@@ -1724,7 +1735,7 @@ describe('InputController - Message Queue', () => {
       expect(pathEl?.textContent).toBe('/usr/bin/rm');
 
       const agentEl = parentEl.querySelector('claudian-ask-approval-agent');
-      expect(agentEl?.textContent).toBe('Agent: agent-42');
+      expect(agentEl?.textContent).toBe('执行单元：agent-42');
 
       controller.dismissPendingApproval();
       await approvalPromise;
@@ -1829,6 +1840,69 @@ describe('InputController - Message Queue', () => {
       controller = new InputController(deps);
 
       await expect(controller.handleInstructionSubmit('test')).resolves.not.toThrow();
+    });
+  });
+
+  describe('custom instructions proposal channel', () => {
+    it('removes the hidden proposal from persisted message text and text blocks', () => {
+      deps = createMockDeps();
+      controller = new InputController(deps);
+      deps.state.currentTextContent = `请在弹窗中确认。\n<!-- second-brain-custom-instructions:append\n新增规则\n-->`;
+      const message = {
+        id: 'assistant-1',
+        role: 'assistant',
+        content: deps.state.currentTextContent,
+        timestamp: 1,
+        contentBlocks: [
+          { type: 'text', content: deps.state.currentTextContent },
+          { type: 'compact_boundary' },
+        ],
+      } as any;
+
+      const proposal = (controller as any).consumeCustomInstructionsProposal(message);
+
+      expect(proposal).toEqual({ operation: 'append', content: '新增规则' });
+      expect(message.content).toBe('请在弹窗中确认。');
+      expect(message.contentBlocks[0].content).toBe('请在弹窗中确认。');
+      expect(deps.state.currentTextContent).toBe('请在弹窗中确认。');
+    });
+
+    it('opens a confirmation modal with the complete appended instruction set', () => {
+      deps = createMockDeps();
+      deps.plugin.settings.systemPrompt = '现有规则';
+      controller = new InputController(deps);
+
+      (controller as any).openCustomInstructionsProposal({
+        operation: 'append',
+        content: '新增规则',
+      });
+
+      expect(CustomInstructionsModal).toHaveBeenCalledWith(
+        deps.plugin.app,
+        deps.plugin,
+        undefined,
+        {
+          initialValue: '现有规则\n\n新增规则',
+          proposalSource: 'conversation',
+        },
+      );
+      const instance = (CustomInstructionsModal as unknown as jest.Mock).mock.results.at(-1)?.value;
+      expect(instance.open).toHaveBeenCalled();
+    });
+
+    it('rejects an oversized proposal without opening the modal', () => {
+      deps = createMockDeps();
+      controller = new InputController(deps);
+      (CustomInstructionsModal as unknown as jest.Mock).mockClear();
+      mockNotice.mockClear();
+
+      (controller as any).openCustomInstructionsProposal({
+        operation: 'replace',
+        content: 'x'.repeat(20_001),
+      });
+
+      expect(CustomInstructionsModal).not.toHaveBeenCalled();
+      expect(mockNotice).toHaveBeenCalledWith(expect.stringContaining('超过 20,000 字'));
     });
   });
 
@@ -1957,7 +2031,7 @@ describe('InputController - Message Queue', () => {
 
       await controller.handleInstructionSubmit('empty result');
 
-      expect(mockNotice).toHaveBeenCalledWith('No instruction received');
+      expect(mockNotice).toHaveBeenCalledWith('没有收到可用指令。');
       expect(mockInstructionModeManager.clear).toHaveBeenCalled();
     });
 

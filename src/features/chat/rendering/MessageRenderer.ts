@@ -9,6 +9,7 @@ import type ClaudianPlugin from '../../../main';
 import { formatDurationMmSs } from '../../../utils/date';
 import { processFileLinks, registerFileLinkHandler } from '../../../utils/fileLink';
 import { replaceImageEmbedsWithHtml } from '../../../utils/imageEmbed';
+import { normalizeVaultNoteLinks } from '../../../utils/vaultNoteLinks';
 import { renderKnowledgeWelcome } from '../knowledgeWelcome';
 import { findRewindContext } from '../rewind';
 import {
@@ -237,7 +238,7 @@ export class MessageRenderer {
             continue;
           }
           const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-          void this.renderContent(textEl, block.content);
+          void this.renderContent(textEl, normalizeVaultNoteLinks(block.content, this.app));
           this.addTextCopyButton(textEl, block.content);
         } else if (block.type === 'tool_use') {
           const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
@@ -271,7 +272,7 @@ export class MessageRenderer {
       // Fallback for old conversations without contentBlocks
       if (msg.content) {
         const textEl = contentEl.createDiv({ cls: 'claudian-text-block' });
-        void this.renderContent(textEl, msg.content);
+        void this.renderContent(textEl, normalizeVaultNoteLinks(msg.content, this.app));
         this.addTextCopyButton(textEl, msg.content);
       }
       if (msg.toolCalls) {
@@ -561,7 +562,7 @@ export class MessageRenderer {
       e.stopPropagation();
 
       try {
-        await navigator.clipboard.writeText(markdown);
+        await navigator.clipboard.writeText(normalizeVaultNoteLinks(markdown, this.app));
       } catch {
         // Clipboard API may fail in non-secure contexts
         return;

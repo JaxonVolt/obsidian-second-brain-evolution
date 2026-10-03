@@ -12,8 +12,10 @@ import { stripCurrentNoteContext } from '../../utils/context';
 import { getEnhancedPath, parseEnvironmentVariables } from '../../utils/env';
 import { getVaultPath } from '../../utils/path';
 import { buildContextFromHistory, buildPromptWithHistoryContext } from '../../utils/session';
+import { buildBoundedHistory, cleanHistoryMessage } from '../../utils/boundedHistory';
 import { getCodexCommandsForDropdown, getKnowledgeCommandsForDropdown } from '../commands';
 import type { McpServerManager } from '../mcp';
+import { buildCodexDeveloperInstructions } from './customInstructionsControl';
 import { buildCodexRuntimeProfile, getModelProviderRuntimeEnvironment } from '../model';
 import type { TodoItem } from '../tools';
 import { TOOL_TODO_WRITE } from '../tools/toolNames';
@@ -253,7 +255,7 @@ export class CodexSessionService implements AgentSessionService {
 
     const shouldInjectHistory = !this.currentSessionId && !!conversationHistory?.length;
     const basePromptToSend = shouldInjectHistory
-      ? this.buildPromptWithHistory(prompt, conversationHistory)
+      ? await this.buildPromptWithHistory(prompt, conversationHistory, queryOptions?.historySourcePath)
       : prompt;
     const promptToSend = this.decoratePromptForMode(basePromptToSend, this.plugin.settings.permissionMode);
 
@@ -524,7 +526,7 @@ export class CodexSessionService implements AgentSessionService {
 
       if (retryWithHistory && conversationHistory?.length) {
         this.currentSessionId = null;
-        const rebuiltPrompt = this.buildPromptWithHistory(originalPrompt, conversationHistory);
+        const rebuiltPrompt = await this.buildPromptWithHistory(originalPrompt, conversationHistory, queryOptions?.historySourcePath);
         yield* this.runCodexQuery({
           codexPath,
           conversationHistory: undefined,
@@ -583,15 +585,31 @@ export class CodexSessionService implements AgentSessionService {
   }): string[] {
     const { codexPath, imagePaths, permissionMode, queryOptions, resumeSessionId, vaultPath } = options;
     const capabilities = detectCodexCliCapabilities(codexPath);
-    const performanceMode = this.plugin.settings.codexPerformanceMode ?? 'fast';
+    const performanceMode = queryOptions?.performanceMode
+      ?? this.plugin.settings.codexPerformanceMode
+      ?? 'fast';
     const runtimeProfile = buildCodexRuntimeProfile(
       this.plugin.settings,
       performanceMode,
       queryOptions?.model?.trim(),
     );
+    const developerInstructions = buildCodexDeveloperInstructions(
+      this.plugin.settings.systemPrompt,
+      queryOptions?.additionalDeveloperInstructions,
+    );
+    const customInstructionArgs = [
+      '-c',
+      `developer_instructions=${JSON.stringify(developerInstructions)}`,
+    ];
     const args = [
-      ...this.buildCodexGlobalArgs(permissionMode, vaultPath, capabilities.approvalFlagScope),
+      ...this.buildCodexGlobalArgs(
+        permissionMode,
+        vaultPath,
+        capabilities.approvalFlagScope,
+        queryOptions?.sandboxMode,
+      ),
       ...runtimeProfile.rootArgs,
+      ...customInstructionArgs,
       'exec',
       ...this.buildCodexExecApprovalArgs(capabilities.approvalFlagScope),
     ];
@@ -629,11 +647,14 @@ export class CodexSessionService implements AgentSessionService {
   private buildCodexGlobalArgs(
     mode: PermissionMode,
     vaultPath: string,
-    approvalFlagScope: CodexApprovalFlagScope
+    approvalFlagScope: CodexApprovalFlagScope,
+    sandboxMode?: 'read-only' | 'workspace-write',
   ): string[] {
+    const resolvedSandbox = sandboxMode
+      ?? (mode === 'yolo' ? 'danger-full-access' : 'workspace-write');
     const args = [
       '-s',
-      mode === 'yolo' ? 'danger-full-access' : 'workspace-write',
+      resolvedSandbox,
       '-C',
       vaultPath,
     ];
@@ -829,8 +850,14 @@ export class CodexSessionService implements AgentSessionService {
     };
   }
 
-  private buildPromptWithHistory(prompt: string, conversationHistory: ChatMessage[]): string {
-    const historyContext = buildContextFromHistory(conversationHistory);
+  private async buildPromptWithHistory(prompt: string, conversationHistory: ChatMessage[], sourcePath?: string): Promise<string> {
+    const validSource = sourcePath && /^\.second-brain\/runtime\/sessions\/[a-z0-9_-]+\.jsonl$/iu.test(sourcePath);
+    if (validSource && await this.plugin.app.vault.adapter.exists(sourcePath).catch(() => false)) {
+      return `${buildBoundedHistory(conversationHistory, prompt, sourcePath)}\n\nUser: ${prompt}`;
+    }
+    const historyContext = buildContextFromHistory(conversationHistory.map((message) => ({
+      ...message, content: cleanHistoryMessage(message),
+    })));
     const actualPrompt = stripCurrentNoteContext(prompt);
     return buildPromptWithHistoryContext(historyContext, prompt, actualPrompt, conversationHistory);
   }

@@ -1,19 +1,23 @@
 import { Notice } from 'obsidian';
 
 import type { AgentSessionService, ApprovalCallbackOptions } from '../../../core/agent';
-import { detectBuiltInCommand, findKnowledgeCommand, isCodexPassthroughCommand } from '../../../core/commands';
+import { type CustomInstructionsProposal,extractCustomInstructionsProposal } from '../../../core/agent/customInstructionsControl';
+import { appendNaturalKnowledgeInstructions, detectBuiltInCommand } from '../../../core/commands';
+import { resolveConversationCommand } from '../../../core/commands/conversationCommandResolver';
 import { TOOL_EXIT_PLAN_MODE } from '../../../core/tools/toolNames';
-import { type ApprovalDecision, BACKEND_CODEX, type BackendId, type ChatMessage, type ExitPlanModeDecision, type SlashCommand } from '../../../core/types';
+import { type ApprovalDecision, BACKEND_CODEX, type BackendId, type ChatMessage, type ExitPlanModeDecision } from '../../../core/types';
 import type ClaudianPlugin from '../../../main';
 import { ResumeSessionDropdown } from '../../../shared/components/ResumeSessionDropdown';
 import { InstructionModal } from '../../../shared/modals/InstructionConfirmModal';
+import { historySourcePath } from '../../../utils/boundedHistory';
 import { appendBrowserContext, type BrowserSelectionContext } from '../../../utils/browser';
 import { appendCanvasContext, type CanvasSelectionContext } from '../../../utils/canvas';
 import { appendCurrentNote } from '../../../utils/context';
 import { formatDurationMmSs } from '../../../utils/date';
 import { appendEditorContext, type EditorSelectionContext } from '../../../utils/editor';
 import { appendMarkdownSnippet } from '../../../utils/markdown';
-import { expandSlashCommandTemplate, parseSlashCommandInvocation } from '../../../utils/slashCommand';
+import { normalizeAssistantNoteReferences } from '../../../utils/vaultNoteLinks';
+import { CustomInstructionsModal, MAX_CUSTOM_INSTRUCTIONS_LENGTH } from '../../settings/CustomInstructionsModal';
 import { COMPLETION_FLAVOR_WORDS } from '../constants';
 import { type InlineAskQuestionConfig, InlineAskUserQuestion } from '../rendering/InlineAskUserQuestion';
 import { InlineExitPlanMode } from '../rendering/InlineExitPlanMode';
@@ -276,6 +280,13 @@ export class InputController {
       if (fileContextManager) {
         promptToSend = fileContextManager.transformContextMentions(promptToSend);
       }
+
+      promptToSend = appendNaturalKnowledgeInstructions(content, promptToSend);
+
+      const longTermMemory = await plugin.llmWikiService.buildContext(content);
+      if (longTermMemory) {
+        promptToSend = `${promptToSend}\n\n${longTermMemory}`;
+      }
     }
 
     fileContextManager?.markCurrentNoteSent();
@@ -383,7 +394,10 @@ export class InputController {
       // Pass history WITHOUT current turn (userMsg + assistantMsg we just added)
       // This prevents duplication when rebuilding context for new sessions
       const previousMessages = state.messages.slice(0, -2);
-      for await (const chunk of agentService.query(promptToSend, imagesForMessage, previousMessages, queryOptions)) {
+      for await (const chunk of agentService.query(promptToSend, imagesForMessage, previousMessages, {
+        ...queryOptions,
+        historySourcePath: historySourcePath(conversationIdForSend),
+      })) {
         if (chunk.type === 'sdk_user_uuid') {
           userMsg.sdkUserUuid = chunk.uuid;
           continue;
@@ -444,10 +458,13 @@ export class InputController {
           }
         }
 
+        const customInstructionsProposal = this.consumeCustomInstructionsProposal(assistantMsg);
+
         state.currentContentEl = null;
 
         streamController.finalizeCurrentThinkingBlock(assistantMsg);
         streamController.finalizeCurrentTextBlock(assistantMsg);
+        normalizeAssistantNoteReferences(assistantMsg, this.deps.plugin.app);
         this.deps.getSubagentManager().resetStreamingState();
 
         // Auto-hide completed status panels on response end
@@ -478,6 +495,10 @@ export class InputController {
         // Only clear resumeSessionAt if enqueue succeeded; preserve checkpoint on failure for retry
         const saveExtras = didEnqueueToSdk ? { resumeSessionAt: undefined } : undefined;
         await conversationController.save(true, saveExtras);
+
+        if (customInstructionsProposal) {
+          this.openCustomInstructionsProposal(customInstructionsProposal);
+        }
 
         const userMsgIndex = state.messages.indexOf(userMsg);
         renderer.refreshActionButtons(userMsg, state.messages, userMsgIndex >= 0 ? userMsgIndex : undefined);
@@ -990,48 +1011,59 @@ export class InputController {
   }
 
   private resolveCodexSlashCommand(input: string): CodexSlashResolution | null {
-    const invocation = parseSlashCommandInvocation(input);
-    if (!invocation) {
-      return null;
-    }
-
-    if (isCodexPassthroughCommand(invocation.name)) {
-      return { prompt: input };
-    }
-
-    const command = this.findSlashCommand(invocation.name);
-    if (!command) {
-      return null;
-    }
-
-    if (command.userInvocable === false) {
-      return {
-        prompt: input,
-        blockedNotice: `/${command.name} cannot be invoked directly.`,
-      };
-    }
-
-    const queryOptions: QueryOptions = {};
-    const model = typeof command.model === 'string' ? command.model.trim() : '';
-    if (model) {
-      queryOptions.model = model;
-    }
-
-    if (command.allowedTools && command.allowedTools.length > 0) {
-      queryOptions.allowedTools = [...command.allowedTools];
-    }
-
+    const resolution = resolveConversationCommand(input, this.deps.plugin.settings.slashCommands);
+    if (!resolution) return null;
     return {
-      prompt: expandSlashCommandTemplate(command.content, invocation),
-      queryOptions: Object.keys(queryOptions).length > 0 ? queryOptions : undefined,
+      prompt: resolution.prompt,
+      blockedNotice: resolution.blockedMessage,
+      queryOptions: resolution.queryOptions,
     };
   }
 
-  private findSlashCommand(name: string): SlashCommand | null {
-    const normalizedName = name.trim().toLowerCase();
-    return findKnowledgeCommand(normalizedName)
-      ?? this.deps.plugin.settings.slashCommands.find((command) => command.name.toLowerCase() === normalizedName)
-      ?? null;
+  private consumeCustomInstructionsProposal(message: ChatMessage): CustomInstructionsProposal | null {
+    const parsed = extractCustomInstructionsProposal(message.content);
+    if (!parsed.proposal) return null;
+
+    message.content = parsed.cleanedText;
+    this.deps.state.currentTextContent = extractCustomInstructionsProposal(
+      this.deps.state.currentTextContent,
+    ).cleanedText;
+    message.contentBlocks = message.contentBlocks?.map((block) => {
+      if (block.type !== 'text') return block;
+      return {
+        ...block,
+        content: extractCustomInstructionsProposal(block.content).cleanedText,
+      };
+    });
+
+    return parsed.proposal;
+  }
+
+  private openCustomInstructionsProposal(proposal: CustomInstructionsProposal): void {
+    const { plugin } = this.deps;
+    const currentValue = plugin.settings.systemPrompt?.trim() ?? '';
+    let proposedValue = '';
+
+    if (proposal.operation === 'append') {
+      proposedValue = appendMarkdownSnippet(currentValue, proposal.content);
+    } else if (proposal.operation === 'replace') {
+      proposedValue = proposal.content.trim();
+    }
+
+    if (proposedValue.length > MAX_CUSTOM_INSTRUCTIONS_LENGTH) {
+      new Notice(`自定义指令修改后将超过 ${MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString('zh-CN')} 字，请缩短后重试。`);
+      return;
+    }
+
+    new CustomInstructionsModal(
+      plugin.app,
+      plugin,
+      undefined,
+      {
+        initialValue: proposedValue,
+        proposalSource: 'conversation',
+      },
+    ).open();
   }
 
   // ============================================

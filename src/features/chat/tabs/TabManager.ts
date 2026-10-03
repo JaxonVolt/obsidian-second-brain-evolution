@@ -82,7 +82,11 @@ export class TabManager implements TabManagerInterface {
    * @param tabId Optional tab ID (for restoration).
    * @returns The created tab, or null if max tabs reached.
    */
-  async createTab(conversationId?: string | null, tabId?: TabId): Promise<TabData | null> {
+  async createTab(
+    conversationId?: string | null,
+    tabId?: TabId,
+    customTitle?: string,
+  ): Promise<TabData | null> {
     const maxTabs = this.getMaxTabs();
     if (this.tabs.size >= maxTabs) {
       return null;
@@ -109,10 +113,15 @@ export class TabManager implements TabManagerInterface {
       },
       onConversationIdChanged: (conversationId) => {
         // Sync tab.conversationId when conversation is lazily created
+        const previousConversationId = tab.conversationId;
         tab.conversationId = conversationId;
+        if (previousConversationId && previousConversationId !== conversationId) {
+          tab.customTitle = undefined;
+        }
         this.callbacks.onTabConversationChanged?.(tab.id, conversationId);
       },
     });
+    tab.customTitle = customTitle;
 
     // Initialize UI components with shared SDK commands callback
     initializeTabUI(tab, this.plugin, {
@@ -211,6 +220,10 @@ export class TabManager implements TabManagerInterface {
   async closeTab(tabId: TabId, force = false): Promise<boolean> {
     const tab = this.tabs.get(tabId);
     if (!tab) {
+      return false;
+    }
+    if (tab.fixedTitle) {
+      new Notice(`${tab.fixedTitle}是固定同步标签页，不能关闭。`);
       return false;
     }
 
@@ -312,15 +325,20 @@ export class TabManager implements TabManagerInterface {
     let index = 1;
 
     for (const tab of this.tabs.values()) {
+      const title = !tab.conversationId && !tab.customTitle
+        ? `新对话 ${index}`
+        : getTabTitle(tab, this.plugin);
       items.push({
         id: tab.id,
-        index: index++,
-        title: getTabTitle(tab, this.plugin),
+        index,
+        title,
         isActive: tab.id === this.activeTabId,
         isStreaming: tab.state.isStreaming,
         needsAttention: tab.state.needsAttention,
-        canClose: this.tabs.size > 1 || !tab.state.isStreaming,
+        canClose: !tab.fixedTitle && (this.tabs.size > 1 || !tab.state.isStreaming),
+        canRename: !tab.fixedTitle,
       });
+      index++;
     }
 
     return items;
@@ -356,14 +374,20 @@ export class TabManager implements TabManagerInterface {
     }
 
     // Open in current tab or new tab
-    if (preferNewTab && this.canCreateTab()) {
+    const activeTab = this.getActiveTab();
+    if (activeTab?.fixedTitle) {
+      if (!this.canCreateTab()) {
+        new Notice(`已达到 ${this.getMaxTabs()} 个标签页上限，请先关闭一个普通标签页。`);
+        return;
+      }
+      await this.createTab(conversationId);
+    } else if (preferNewTab && this.canCreateTab()) {
       await this.createTab(conversationId);
     } else {
       // Open in current tab
       // Note: Don't set tab.conversationId here - the onConversationIdChanged callback
       // will sync it after successful switch. Setting it before switchTo() would cause
       // incorrect tab metadata if switchTo() returns early (streaming/switching/creating).
-      const activeTab = this.getActiveTab();
       if (activeTab) {
         await activeTab.controllers.conversationController?.switchTo(conversationId);
       }
@@ -376,9 +400,76 @@ export class TabManager implements TabManagerInterface {
   async createNewConversation(): Promise<void> {
     const activeTab = this.getActiveTab();
     if (activeTab) {
+      if (activeTab.fixedTitle) {
+        await this.createTab();
+        return;
+      }
       await activeTab.controllers.conversationController?.createNew();
       // Sync tab.conversationId with the newly created conversation
       activeTab.conversationId = activeTab.state.currentConversationId;
+      activeTab.customTitle = undefined;
+      this.callbacks.onTabTitleChanged?.(activeTab.id, getTabTitle(activeTab, this.plugin));
+    }
+  }
+
+  /** Renames a tab and its bound conversation, when one exists. */
+  async renameTab(tabId: TabId, title: string): Promise<boolean> {
+    const tab = this.tabs.get(tabId);
+    const normalizedTitle = title.trim();
+    if (!tab || !normalizedTitle || tab.fixedTitle) return false;
+
+    if (tab.conversationId) {
+      await this.plugin.renameConversation(tab.conversationId, normalizedTitle);
+    }
+
+    tab.customTitle = normalizedTitle;
+    this.callbacks.onTabTitleChanged?.(tab.id, normalizedTitle);
+    return true;
+  }
+
+  async ensureFixedConversationTab(conversationId: string, title: string): Promise<TabData | null> {
+    const existing = [...this.tabs.values()].find((tab) => tab.conversationId === conversationId);
+    if (existing) {
+      existing.fixedTitle = title;
+      existing.customTitle = title;
+      this.callbacks.onTabTitleChanged?.(existing.id, title);
+      return existing;
+    }
+    const previousFixed = [...this.tabs.values()].find(
+      (tab) => tab.fixedTitle === title || tab.customTitle === title,
+    );
+    if (previousFixed) {
+      await previousFixed.controllers.conversationController?.switchTo(conversationId);
+      previousFixed.conversationId = conversationId;
+      previousFixed.fixedTitle = title;
+      previousFixed.customTitle = title;
+      this.callbacks.onTabTitleChanged?.(previousFixed.id, title);
+      return previousFixed;
+    }
+    if (!this.canCreateTab()) return null;
+
+    const previousActiveTabId = this.activeTabId;
+    const tab = await this.createTab(conversationId, undefined, title);
+    if (!tab) return null;
+    tab.fixedTitle = title;
+    if (previousActiveTabId && this.tabs.has(previousActiveTabId)) {
+      await this.switchToTab(previousActiveTabId);
+    }
+    return tab;
+  }
+
+  async refreshConversation(conversationId: string, attempt = 0): Promise<void> {
+    let needsRetry = false;
+    for (const tab of this.tabs.values()) {
+      if (tab.conversationId !== conversationId) continue;
+      if (tab.state.isStreaming) {
+        needsRetry = true;
+        continue;
+      }
+      await tab.controllers.conversationController?.loadActive();
+    }
+    if (needsRetry && attempt < 20) {
+      window.setTimeout(() => void this.refreshConversation(conversationId, attempt + 1), 250);
     }
   }
 
@@ -492,6 +583,7 @@ export class TabManager implements TabManagerInterface {
       openTabs.push({
         tabId: tab.id,
         conversationId: tab.conversationId,
+        ...(tab.customTitle && { customTitle: tab.customTitle }),
       });
     }
 
@@ -506,7 +598,7 @@ export class TabManager implements TabManagerInterface {
     // Create tabs from persisted state with error handling
     for (const tabState of state.openTabs) {
       try {
-        await this.createTab(tabState.conversationId, tabState.tabId);
+        await this.createTab(tabState.conversationId, tabState.tabId, tabState.customTitle);
       } catch {
         // Continue restoring other tabs
       }

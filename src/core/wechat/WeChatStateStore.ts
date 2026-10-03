@@ -1,6 +1,11 @@
 import { spawn } from 'child_process';
 
+import { mutatePluginData } from '../storage/PluginDataMutation';
 import type { WeChatCredential } from './types';
+import type {
+  WeChatConversationPreferences,
+  WeChatPendingAction,
+} from './WeChatCollaborationService';
 import type { WeChatDigestDraft } from './WeChatDigestCommands';
 
 export interface SecretProtector {
@@ -17,11 +22,33 @@ interface PersistedCredential extends Omit<WeChatCredential, 'token'> {
   encryptedToken: string;
 }
 
+export interface WeChatOutboundContext {
+  userId: string;
+  contextToken: string;
+  updatedAt: string;
+}
+
+interface PersistedOutboundContext extends Omit<WeChatOutboundContext, 'contextToken'> {
+  encryptedContextToken: string;
+}
+
+export interface WeChatButlerDeliveryState {
+  pendingDate?: string;
+  lastSentDate?: string;
+  lastAttemptAt?: string;
+  lastError?: string;
+  lastBriefActionIds?: string[];
+}
+
 interface PersistedWeChatState {
   credential?: PersistedCredential;
   cursor?: string;
   processedMessageIds?: string[];
   digestDraft?: WeChatDigestDraft;
+  conversation?: WeChatConversationPreferences;
+  pendingAction?: WeChatPendingAction;
+  outboundContext?: PersistedOutboundContext;
+  butlerDelivery?: WeChatButlerDeliveryState;
 }
 
 interface PluginData extends Record<string, unknown> {
@@ -150,12 +177,70 @@ export class WeChatStateStore {
     await this.mutate((state) => { delete state.digestDraft; });
   }
 
+  async loadConversationPreferences(): Promise<WeChatConversationPreferences | null> {
+    await this.writeQueue;
+    return (await this.loadState()).conversation ?? null;
+  }
+
+  async saveConversationPreferences(preferences: WeChatConversationPreferences): Promise<void> {
+    await this.mutate((state) => { state.conversation = preferences; });
+  }
+
+  async loadPendingAction(): Promise<WeChatPendingAction | null> {
+    await this.writeQueue;
+    return (await this.loadState()).pendingAction ?? null;
+  }
+
+  async savePendingAction(action: WeChatPendingAction): Promise<void> {
+    await this.mutate((state) => { state.pendingAction = action; });
+  }
+
+  async clearPendingAction(): Promise<void> {
+    await this.mutate((state) => { delete state.pendingAction; });
+  }
+
+  async saveOutboundContext(context: WeChatOutboundContext): Promise<void> {
+    const encryptedContextToken = await this.protector.protect(context.contextToken);
+    await this.mutate((state) => {
+      state.outboundContext = {
+        userId: context.userId,
+        updatedAt: context.updatedAt,
+        encryptedContextToken,
+      };
+    });
+  }
+
+  async loadOutboundContext(): Promise<WeChatOutboundContext | null> {
+    await this.writeQueue;
+    const state = await this.loadState();
+    if (!state.outboundContext) return null;
+    const contextToken = await this.protector.unprotect(state.outboundContext.encryptedContextToken);
+    return {
+      userId: state.outboundContext.userId,
+      updatedAt: state.outboundContext.updatedAt,
+      contextToken,
+    };
+  }
+
+  async loadButlerDelivery(): Promise<WeChatButlerDeliveryState> {
+    await this.writeQueue;
+    return { ...((await this.loadState()).butlerDelivery ?? {}) };
+  }
+
+  async saveButlerDelivery(delivery: WeChatButlerDeliveryState): Promise<void> {
+    await this.mutate((state) => { state.butlerDelivery = { ...delivery }; });
+  }
+
   async clear(): Promise<void> {
     await this.mutate((state) => {
       delete state.credential;
       delete state.cursor;
       delete state.processedMessageIds;
       delete state.digestDraft;
+      delete state.conversation;
+      delete state.pendingAction;
+      delete state.outboundContext;
+      delete state.butlerDelivery;
     });
   }
 
@@ -165,12 +250,13 @@ export class WeChatStateStore {
   }
 
   private async mutate(mutator: (state: PersistedWeChatState) => void): Promise<void> {
-    this.writeQueue = this.writeQueue.then(async () => {
-      const data = ((await this.host.loadData()) ?? {}) as PluginData;
+    const operation = mutatePluginData(this.host, (raw) => {
+      const data = raw as PluginData;
       const state: PersistedWeChatState = { ...(data.wechat ?? {}) };
       mutator(state);
-      await this.host.saveData({ ...data, wechat: state });
+      data.wechat = state;
     });
-    return this.writeQueue;
+    this.writeQueue = operation.catch(() => undefined);
+    return operation;
   }
 }

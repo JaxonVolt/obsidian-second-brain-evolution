@@ -11,8 +11,10 @@ export {
   isCodexPassthroughCommand,
 } from './codexCommands';
 export {
+  appendNaturalKnowledgeInstructions,
   findKnowledgeCommand,
   getKnowledgeCommandsForDropdown,
   KNOWLEDGE_COMMANDS,
   KNOWLEDGE_QUICK_ACTIONS,
+  shouldUseNaturalKnowledgeMode,
 } from './knowledgeCommands';

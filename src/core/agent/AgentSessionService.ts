@@ -1,4 +1,4 @@
-import type { ApprovalDecision, BackendCapabilities, BackendId, ChatMessage, Conversation, ExitPlanModeCallback, ImageAttachment, SlashCommand, StreamChunk } from '../types';
+import type { ApprovalDecision, BackendCapabilities, BackendId, ChatMessage, CodexPerformanceMode, Conversation, ExitPlanModeCallback, ImageAttachment, SlashCommand, StreamChunk } from '../types';
 import type { ClosePersistentQueryOptions } from './types';
 
 export interface ApprovalCallbackOptions {
@@ -22,10 +22,16 @@ export type AskUserQuestionCallback = (
 export interface QueryOptions {
   allowedTools?: string[];
   model?: string;
+  performanceMode?: CodexPerformanceMode;
+  sandboxMode?: 'read-only' | 'workspace-write';
+  /** Extra developer instructions for the current channel only. */
+  additionalDeveloperInstructions?: string;
   mcpMentions?: Set<string>;
   enabledMcpServers?: Set<string>;
   forceColdStart?: boolean;
   externalContextPaths?: string[];
+  /** Existing plugin transcript for on-demand recovery of older conversation details. */
+  historySourcePath?: string;
 }
 
 export interface EnsureReadyOptions {

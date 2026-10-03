@@ -2,24 +2,40 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-modifier-border) transparent;
 }
 
 .claudian-tab-badges {
   display: flex;
   align-items: center;
   gap: 4px;
+  padding-bottom: 2px;
 }
 
 .claudian-tab-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  flex: 0 0 auto;
+  min-width: 52px;
+  max-width: 140px;
+  height: 26px;
+  padding: 0 8px;
+  overflow: hidden;
   border-radius: 4px;
   border: 2px solid var(--background-modifier-border);
   font-size: 12px;
   font-weight: 500;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   cursor: pointer;
   color: var(--text-muted);
   background: var(--background-primary);
@@ -46,6 +62,22 @@
 
 .claudian-tab-badge-idle {
   border-color: var(--background-modifier-border);
+}
+
+.claudian-tab-rename-modal {
+  width: min(420px, calc(100vw - 32px));
+}
+
+.claudian-tab-rename-input {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.claudian-tab-rename-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 
 .claudian-tab-content-container {

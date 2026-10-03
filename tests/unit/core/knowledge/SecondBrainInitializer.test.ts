@@ -27,7 +27,7 @@ describe('SecondBrainInitializer', () => {
 
     expect(result.createdFiles).toHaveLength(Object.keys(SKELETON_FILES).length);
     expect(fixture.files.has(SECOND_BRAIN_PATHS.coreCoordinate)).toBe(true);
-    expect(fixture.files.has(`${SECOND_BRAIN_PATHS.templates}/每日笔记模板.md`)).toBe(true);
+    expect(fixture.files.has(`${SECOND_BRAIN_PATHS.templates}/00_每日笔记模板.md`)).toBe(true);
     expect(await fixture.initializer.getStatus()).toBe('completed');
   });
 

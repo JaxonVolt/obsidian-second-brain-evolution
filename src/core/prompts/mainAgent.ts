@@ -6,6 +6,7 @@
  */
 
 import { getTodayDate } from '../../utils/date';
+import { VAULT_LINK_INSTRUCTIONS } from '../agent/vaultLinkInstructions';
 
 export interface SystemPromptSettings {
   mediaFolder?: string;
@@ -233,6 +234,43 @@ selected webpage content
 **When present:** The user selected this text before sending their message. Use this context to understand what they're referring to.`;
 }
 
+function getDailyLogOrganizationInstructions(): string {
+  return `
+
+## Daily Log Organization Contract (MUST FOLLOW)
+
+This contract applies when the user asks to organize, review, complete, distill, or consolidate personal daily logs or work logs, including Chinese requests such as "整理日志", "整理近期日志", "复盘日志", or "补全日志". Personal daily logs live under \`300_复盘与日志/310_每日笔记\`; work logs live under \`100_领域与职责/140_工作日志\`.
+
+1. **Default meaning and authorization**
+   - The request means: organize each selected log in place according to its own log type and maintain justified reciprocal links with existing notes.
+   - When the request is "整理近期日志", scan personal daily logs and work logs as two independent ranges. Do not merge same-date files, copy content between them, or treat one range as evidence that the other range was organized.
+   - Do not ask the user to choose between read-only analysis and in-place organization. The request itself authorizes the narrow changes listed below after the normal safety snapshot or confirmation gate.
+   - Updating existing permanent notes with verbatim evidence from the selected logs is included. Creating a new permanent note or changing actions, projects, decisions, or unrelated files still requires a separate proposal and confirmation.
+
+2. **Log change allowlists**
+   - In a personal daily log, you may change only the frontmatter \`updated\` value; the four list items under "沉淀与回流"; and, when a reciprocal permanent-note entry was actually written, append a Wiki-link after an existing statement without changing any character before the link.
+   - In a work log, you may change only the frontmatter \`updated\` value and these four items under "沉淀与回流": "加入行动工作台", "更新技能或项目", "值得单独整理的故障", and "其他可复用内容".
+   - Do not change headings, emphasis marks, comments, spacing, order, checkboxes, numbers, names, dates, wording, punctuation, or any other user-authored content. Never reformat headings with \`==\` or remove pasted material.
+   - Do not fill, rewrite, summarize, move, merge, or delete content in "今天做了什么", "今天没做到什么", "今天的想法", "待处理的事务", "行为与状态", "收尾", or "明日规划" unless the user explicitly asks for that additional edit.
+   - In work logs, also never alter "基本信息", "今天做了什么", "学到或注意到什么", "安全与授权", "问题与待办", or "下次继续" unless the user explicitly asks for that additional edit.
+
+3. **Complete four-way routing by log type**
+   - Every selected personal daily log must retain exactly these four non-empty routing items: "永久笔记", "回到项目、领域或旧笔记", "需要继续消化或核实", and "可以发展成输出".
+   - Every selected work log must retain exactly these four non-empty routing items: "加入行动工作台", "更新技能或项目", "值得单独整理的故障", and "其他可复用内容".
+   - Use verified existing Wiki-links where a destination exists. Write "暂无" when a category has no justified destination; never leave a routing item blank and never omit a selected log.
+   - Do not create a monthly index, summary note, or alternative organization artifact unless the user explicitly requests one.
+
+4. **Permanent-note evidence discipline**
+   - Quote the source log verbatim, then place AI-authored synthesis and applicability limits in clearly labeled separate text. Do not present AI synthesis as the user's original words.
+   - Add reciprocal source links in both the log and the existing destination note when that destination was actually updated. Do not claim that an action, project, skill record, troubleshooting note, or permanent note was updated when it was only proposed.
+
+5. **Required verification**
+   - Before editing, snapshot every target log and permanent note.
+   - After editing, compare each log against its snapshot after masking only the allowlisted fields. The comparison must show zero other changes.
+   - Verify the correct four routing items for each log type are non-empty, every Wiki-link resolves, reciprocal links exist where a destination was actually updated, and no requested log was skipped.
+   - Report personal-log and work-log target ranges separately, changed files by type, changed destination notes, unchanged-content verification, unresolved items, and rollback location.`;
+}
+
 function getImageInstructions(mediaFolder: string): string {
   const folder = mediaFolder.trim();
   const mediaPath = folder ? './' + folder : '.';
@@ -299,12 +337,15 @@ export function buildSystemPrompt(settings: SystemPromptSettings = {}): string {
   let prompt = getBaseSystemPrompt(settings.vaultPath, settings.userName);
 
   // Stable content (ordered for context cache optimization)
+  prompt += getDailyLogOrganizationInstructions();
   prompt += getImageInstructions(settings.mediaFolder || '');
   prompt += getExportInstructions(settings.allowedExportPaths || []);
 
   if (settings.customPrompt?.trim()) {
     prompt += '\n\n## Custom Instructions\n\n' + settings.customPrompt.trim();
   }
+
+  prompt += '\n\n' + VAULT_LINK_INSTRUCTIONS;
 
   return prompt;
 }

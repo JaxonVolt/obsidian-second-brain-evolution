@@ -1,10 +1,11 @@
 /* eslint-disable simple-import-sort/imports */
-import { type EventRef, ItemView, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
+import { type EventRef, ItemView, Menu, Notice, setIcon, type WorkspaceLeaf } from 'obsidian';
 
 import { BACKEND_CODEX, VIEW_TYPE_CLAUDIAN } from '../../core/types';
 import type ClaudianPlugin from '../../main';
-import { TabBar, TabManager, updatePlanModeUI } from './tabs';
-import type { TabData, TabId } from './tabs/types';
+import { CustomInstructionsModal } from '../settings/CustomInstructionsModal';
+import { requestTabTitle, TabBar, TabManager, updatePlanModeUI } from './tabs';
+import type { TabBarItem, TabData, TabId } from './tabs/types';
 
 export class ClaudianView extends ItemView {
   private plugin: ClaudianPlugin;
@@ -28,6 +29,11 @@ export class ClaudianView extends ItemView {
 
   // Header elements
   private historyDropdown: HTMLElement | null = null;
+  private proactiveReviewBtn: HTMLElement | null = null;
+  private proactiveReviewCountEl: HTMLElement | null = null;
+  private proactiveInsightBtn: HTMLElement | null = null;
+  private proactiveInsightCountEl: HTMLElement | null = null;
+  private customInstructionsBtn: HTMLElement | null = null;
 
   // Event refs for cleanup
   private eventRefs: EventRef[] = [];
@@ -152,7 +158,10 @@ export class ClaudianView extends ItemView {
           this.persistTabState();
         },
         onTabStreamingChanged: () => this.updateTabBar(),
-        onTabTitleChanged: () => this.updateTabBar(),
+        onTabTitleChanged: () => {
+          this.updateTabBar();
+          this.persistTabState();
+        },
         onTabAttentionChanged: () => this.updateTabBar(),
         onTabConversationChanged: () => {
           this.refreshBackendBadge();
@@ -166,6 +175,7 @@ export class ClaudianView extends ItemView {
 
     // Restore tabs from persisted state or create default tab
     await this.restoreOrCreateTabs();
+    await this.plugin.weChatService.ensureDesktopConversationTab();
 
     // Apply initial layout based on tabBarPosition setting
     this.updateLayoutForPosition();
@@ -237,8 +247,7 @@ export class ClaudianView extends ItemView {
     this.tabBarContainerEl.className = 'claudian-tab-bar-container';
     this.tabBar = new TabBar(this.tabBarContainerEl, {
       onTabClick: (tabId) => this.handleTabClick(tabId),
-      onTabClose: (tabId) => this.handleTabClose(tabId),
-      onNewTab: () => this.handleNewTab(),
+      onTabContextMenu: (item, event) => this.handleTabContextMenu(item, event),
     });
     fragment.appendChild(this.tabBarContainerEl);
 
@@ -246,22 +255,42 @@ export class ClaudianView extends ItemView {
     this.headerActionsContent = document.createElement('div');
     this.headerActionsContent.className = 'claudian-header-actions';
 
-    // New tab button (plus icon)
-    const newTabBtn = this.headerActionsContent.createDiv({ cls: 'claudian-header-btn claudian-new-tab-btn' });
-    setIcon(newTabBtn, 'square-plus');
-    newTabBtn.setAttribute('aria-label', '新建对话标签页');
-    newTabBtn.addEventListener('click', async () => {
-      await this.handleNewTab();
-    });
-
-    // New conversation button (square-pen icon - new conversation in current tab)
-    const newBtn = this.headerActionsContent.createDiv({ cls: 'claudian-header-btn' });
+    // New conversation always opens a separate empty tab and preserves the current tab.
+    const newBtn = this.headerActionsContent.createDiv({ cls: 'claudian-header-btn claudian-new-tab-btn' });
     setIcon(newBtn, 'square-pen');
     newBtn.setAttribute('aria-label', '新建对话');
     newBtn.addEventListener('click', async () => {
-      await this.tabManager?.createNewConversation();
-      this.updateHistoryDropdown();
+      await this.handleNewTab();
     });
+
+    this.proactiveReviewBtn = this.headerActionsContent.createDiv({
+      cls: 'claudian-header-btn claudian-review-btn',
+    });
+    setIcon(this.proactiveReviewBtn, 'list-checks');
+    this.proactiveReviewBtn.setAttribute('aria-label', '行动工作台');
+    this.proactiveReviewBtn.addEventListener('click', () => this.plugin.openActionWorkbench());
+    this.proactiveReviewCountEl = this.proactiveReviewBtn.createSpan({ cls: 'claudian-review-count' });
+    this.updateProactiveReviewCount(this.plugin.getProactiveReviewCount());
+
+    this.proactiveInsightBtn = this.headerActionsContent.createDiv({
+      cls: 'claudian-header-btn claudian-insight-btn',
+    });
+    setIcon(this.proactiveInsightBtn, 'bell-ring');
+    this.proactiveInsightBtn.setAttribute('aria-label', '记忆管家');
+    this.proactiveInsightBtn.addEventListener('click', () => this.plugin.openProactiveInsights());
+    this.proactiveInsightCountEl = this.proactiveInsightBtn.createSpan({ cls: 'claudian-insight-count' });
+    this.updateProactiveInsightCount(this.plugin.getProactiveInsightCount());
+
+    this.customInstructionsBtn = this.headerActionsContent.createDiv({
+      cls: 'claudian-header-btn claudian-custom-instructions-btn',
+    });
+    setIcon(this.customInstructionsBtn, 'scroll-text');
+    this.customInstructionsBtn.addEventListener('click', () => {
+      new CustomInstructionsModal(this.app, this.plugin, () => {
+        this.refreshCustomInstructionsButton();
+      }).open();
+    });
+    this.refreshCustomInstructionsButton();
 
     // History dropdown
     const historyContainer = this.headerActionsContent.createDiv({ cls: 'claudian-history-container' });
@@ -330,12 +359,74 @@ export class ClaudianView extends ItemView {
     this.updateTabBarVisibility();
   }
 
+  updateProactiveReviewCount(count: number): void {
+    if (!this.proactiveReviewBtn || !this.proactiveReviewCountEl) return;
+    void count;
+    this.proactiveReviewCountEl.style.display = 'none';
+    this.proactiveReviewBtn.setAttribute('aria-label', '行动工作台');
+  }
+
+  updateProactiveInsightCount(count: number): void {
+    if (!this.proactiveInsightBtn || !this.proactiveInsightCountEl) return;
+    const normalized = Math.max(0, count);
+    this.proactiveInsightCountEl.setText(normalized > 99 ? '99+' : String(normalized));
+    this.proactiveInsightCountEl.style.display = normalized > 0 ? '' : 'none';
+    this.proactiveInsightBtn.setAttribute(
+      'aria-label',
+      normalized > 0 ? `记忆管家，${normalized} 条待确认` : '记忆管家',
+    );
+  }
+
+  refreshCustomInstructionsButton(): void {
+    if (!this.customInstructionsBtn) return;
+    const enabled = Boolean(this.plugin.settings.systemPrompt?.trim());
+    this.customInstructionsBtn.toggleClass('is-active', enabled);
+    this.customInstructionsBtn.setAttribute(
+      'aria-label',
+      enabled ? '自定义指令（已启用）' : '自定义指令',
+    );
+  }
+
   // ============================================
   // Tab Management
   // ============================================
 
   private handleTabClick(tabId: TabId): void {
     this.tabManager?.switchToTab(tabId);
+  }
+
+  private handleTabContextMenu(item: TabBarItem, event: MouseEvent): void {
+    const menu = new Menu();
+
+    menu.addItem(menuItem => {
+      menuItem
+        .setTitle('重命名标签页')
+        .setIcon('pencil')
+        .setDisabled(item.canRename === false)
+        .onClick(async () => {
+          const title = await requestTabTitle(this.app, item.title);
+          if (!title) return;
+
+          try {
+            await this.tabManager?.renameTab(item.id, title);
+          } catch {
+            new Notice('重命名标签页失败。');
+          }
+        });
+    });
+
+    menu.addItem(menuItem => {
+      menuItem
+        .setTitle('删除标签页')
+        .setIcon('trash-2')
+        .setWarning(true)
+        .setDisabled(!item.canClose)
+        .onClick(() => {
+          void this.handleTabClose(item.id);
+        });
+    });
+
+    menu.showAtMouseEvent(event);
   }
 
   private async handleTabClose(tabId: TabId): Promise<void> {
@@ -349,8 +440,8 @@ export class ClaudianView extends ItemView {
   private async handleNewTab(): Promise<void> {
     const tab = await this.tabManager?.createTab();
     if (!tab) {
-      const maxTabs = this.plugin.settings.maxTabs ?? 3;
-      new Notice(`Maximum ${maxTabs} tabs allowed`);
+      const maxTabs = this.plugin.settings.maxTabs ?? 10;
+      new Notice(`最多只能同时打开 ${maxTabs} 个对话标签页。`);
       return;
     }
     this.updateTabBarVisibility();

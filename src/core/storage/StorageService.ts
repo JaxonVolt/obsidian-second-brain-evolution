@@ -44,6 +44,7 @@ import {
   convertEnvObjectToString,
   mergeEnvironmentVariables,
 } from './migrationConstants';
+import { mutatePluginData } from './PluginDataMutation';
 import { SESSIONS_PATH, SessionStorage } from './SessionStorage';
 import { SKILLS_PATH, SkillStorage } from './SkillStorage';
 import { COMMANDS_PATH, SlashCommandStorage } from './SlashCommandStorage';
@@ -83,6 +84,7 @@ interface LegacySettingsJson {
   environmentVariables?: string;
   envSnippets?: unknown[];
   systemPrompt?: string;
+  wechatAdditionalInstructions?: string;
   allowedExportPaths?: string[];
   keyboardNavigation?: unknown;
   claudeCliPath?: string;
@@ -280,6 +282,8 @@ export class StorageService {
       environmentVariables, // Merged from both sources
       envSnippets: oldSettings.envSnippets as StoredClaudianSettings['envSnippets'] ?? DEFAULT_SETTINGS.envSnippets,
       systemPrompt: oldSettings.systemPrompt ?? DEFAULT_SETTINGS.systemPrompt,
+      wechatAdditionalInstructions: oldSettings.wechatAdditionalInstructions
+        ?? DEFAULT_SETTINGS.wechatAdditionalInstructions,
       allowedExportPaths: oldSettings.allowedExportPaths ?? DEFAULT_SETTINGS.allowedExportPaths,
       persistentExternalContextPaths: DEFAULT_SETTINGS.persistentExternalContextPaths,
       keyboardNavigation: oldSettings.keyboardNavigation as StoredClaudianSettings['keyboardNavigation'] ?? DEFAULT_SETTINGS.keyboardNavigation,
@@ -383,25 +387,14 @@ export class StorageService {
   }
 
   private async clearLegacyDataJson(): Promise<void> {
-    const dataJson = await this.loadDataJson();
-    if (!dataJson) {
-      return;
-    }
-
-    const cleaned: Record<string, unknown> = { ...dataJson };
-    delete cleaned.lastEnvHash;
-    delete cleaned.lastClaudeModel;
-    delete cleaned.lastCustomModel;
-    delete cleaned.conversations;
-    delete cleaned.slashCommands;
-    delete cleaned.migrationVersion;
-
-    if (Object.keys(cleaned).length === 0) {
-      await this.plugin.saveData({});
-      return;
-    }
-
-    await this.plugin.saveData(cleaned);
+    await mutatePluginData(this.plugin, (data) => {
+      delete data.lastEnvHash;
+      delete data.lastClaudeModel;
+      delete data.lastCustomModel;
+      delete data.conversations;
+      delete data.slashCommands;
+      delete data.migrationVersion;
+    });
   }
 
   private async loadDataJson(): Promise<LegacyDataJson | null> {
@@ -495,9 +488,7 @@ export class StorageService {
       return;
     }
 
-    const cleaned: Record<string, unknown> = { ...dataJson };
-    delete cleaned.activeConversationId;
-    await this.plugin.saveData(cleaned);
+    await mutatePluginData(this.plugin, (data) => { delete data.activeConversationId; });
   }
 
   /**
@@ -557,9 +548,7 @@ export class StorageService {
 
   async setTabManagerState(state: TabManagerPersistedState): Promise<void> {
     try {
-      const data = (await this.plugin.loadData()) || {};
-      data.tabManagerState = state;
-      await this.plugin.saveData(data);
+      await mutatePluginData(this.plugin, (data) => { data.tabManagerState = state; });
     } catch {
       new Notice('Failed to save tab layout');
     }

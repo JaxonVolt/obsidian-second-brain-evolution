@@ -319,6 +319,7 @@ export interface ClaudianSettings {
   excludedTags: string[];
   mediaFolder: string;
   systemPrompt: string;
+  wechatAdditionalInstructions: string;
   allowedExportPaths: string[];
   persistentExternalContextPaths: string[];  // Paths that persist across all sessions
 
@@ -355,7 +356,7 @@ export interface ClaudianSettings {
   slashCommands: SlashCommand[];
 
   // UI preferences
-  maxTabs: number;  // Maximum number of chat tabs (3-10, default 3)
+  maxTabs: number;  // Maximum number of chat tabs (3-10, default 10)
   tabBarPosition: TabBarPosition;  // Where to show tab bar ('input' or 'header')
   enableAutoScroll: boolean;  // Enable auto-scroll during streaming (default: true)
   openInMainTab: boolean;  // Open chat panel in main editor area instead of sidebar
@@ -364,6 +365,57 @@ export interface ClaudianSettings {
   wechatAutoStart: boolean;
   wechatCaptureMedia: boolean;
   wechatMaxAttachmentMB: number;
+  wechatCollaborationEnabled: boolean;
+  wechatDefaultPerformanceMode: CodexPerformanceMode;
+
+  // Daily note information
+  dailyInfoEnabled: boolean;
+
+  // Proactive review and decision tracking
+  proactiveReviewEnabled: boolean;
+  proactiveReviewProjectStaleDays: number;
+  proactiveReviewWeeklyActionDays: number;
+  proactiveReviewMaxVisible: number;
+  proactiveReviewStartupNotice: boolean;
+
+  // Proactive insight center
+  proactiveInsightsEnabled: boolean;
+  proactiveInsightsAutoAnalyze: boolean;
+  proactiveInsightsMinChangedNotes: number;
+  proactiveInsightsDailyLimit: number;
+  proactiveInsightsViewportItems: number;
+  proactiveInsightsStartupNotice: boolean;
+
+  // Action workbench and memory butler
+  actionWorkbenchDefaultView: string;
+  actionWorkbenchViewOrder: string[];
+  actionWorkbenchHiddenViews: string[];
+  actionWorkbenchCompactMode: boolean;
+  actionWorkbenchCustomViews: Array<{
+    id: string;
+    name: string;
+    statuses: string[];
+    priority: string;
+    project: string;
+  }>;
+  memoryButlerMode: 'off' | 'quiet' | 'brief' | 'timely';
+  memoryButlerModules: string[];
+  memoryButlerMaxBriefItems: number;
+
+  // WeChat butler brief
+  wechatButlerEnabled: boolean;
+  wechatButlerBriefTime: string;
+  wechatButlerCatchUp: boolean;
+  wechatButlerIncludeInsights: boolean;
+  wechatButlerMaxItems: number;
+
+  // LLM Wiki long-term memory
+  llmWikiEnabled: boolean;
+  llmWikiAutoStart: boolean;
+  llmWikiAutoRetrieve: boolean;
+  llmWikiTopK: number;
+  llmWikiExecutablePath: string;
+  llmWikiProjectPath: string;
 
   // Slash commands
   hiddenSlashCommands: string[];  // Command names to hide from dropdown (user preference)
@@ -408,6 +460,7 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   excludedTags: [],
   mediaFolder: '',
   systemPrompt: '',
+  wechatAdditionalInstructions: '',
   allowedExportPaths: ['~/Desktop', '~/Downloads'],
   persistentExternalContextPaths: [],
 
@@ -441,7 +494,7 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   slashCommands: [],
 
   // UI preferences
-  maxTabs: 3,  // Default to 3 tabs (safe resource usage)
+  maxTabs: 10,  // Expose the full workspace; tab services remain lazy until first use
   tabBarPosition: 'input',  // Default to input mode (current behavior)
   enableAutoScroll: true,  // Default to auto-scroll enabled
   openInMainTab: false,  // Default to sidebar (current behavior)
@@ -450,6 +503,51 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   wechatAutoStart: true,
   wechatCaptureMedia: true,
   wechatMaxAttachmentMB: 30,
+  wechatCollaborationEnabled: true,
+  wechatDefaultPerformanceMode: 'fast',
+
+  // Daily note information
+  dailyInfoEnabled: true,
+
+  // Proactive review and decision tracking
+  proactiveReviewEnabled: true,
+  proactiveReviewProjectStaleDays: 14,
+  proactiveReviewWeeklyActionDays: 7,
+  proactiveReviewMaxVisible: 3,
+  proactiveReviewStartupNotice: true,
+
+  // Proactive insight center
+  proactiveInsightsEnabled: true,
+  proactiveInsightsAutoAnalyze: false,
+  proactiveInsightsMinChangedNotes: 3,
+  proactiveInsightsDailyLimit: 3,
+  proactiveInsightsViewportItems: 3,
+  proactiveInsightsStartupNotice: true,
+
+  // Action workbench and memory butler
+  actionWorkbenchDefaultView: 'today',
+  actionWorkbenchViewOrder: ['today', 'long-term', 'inbox', 'planned', 'all', 'scheduled', 'waiting', 'projects', 'completed'],
+  actionWorkbenchHiddenViews: [],
+  actionWorkbenchCompactMode: false,
+  actionWorkbenchCustomViews: [],
+  memoryButlerMode: 'brief',
+  memoryButlerModules: ['action-discovery', 'progress', 'review', 'insight'],
+  memoryButlerMaxBriefItems: 5,
+
+  // WeChat butler brief
+  wechatButlerEnabled: false,
+  wechatButlerBriefTime: '08:00',
+  wechatButlerCatchUp: true,
+  wechatButlerIncludeInsights: true,
+  wechatButlerMaxItems: 8,
+
+  // LLM Wiki long-term memory
+  llmWikiEnabled: false,
+  llmWikiAutoStart: false,
+  llmWikiAutoRetrieve: false,
+  llmWikiTopK: 6,
+  llmWikiExecutablePath: '',
+  llmWikiProjectPath: '',
 
   // Slash commands
   hiddenSlashCommands: [],  // No commands hidden by default

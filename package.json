@@ -1,7 +1,7 @@
 {
   "name": "obsidian-second-brain-evolution",
-  "version": "3.5.0",
-  "description": "Multi-provider knowledge evolution system for Obsidian, orchestrated by Codex CLI",
+  "version": "5.7.0",
+  "description": "Local-first Chinese second brain plugin for Obsidian",
   "main": "main.js",
   "scripts": {
     "postinstall": "node scripts/postinstall.mjs",
@@ -11,12 +11,15 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"{src,tests}/**/*.ts\"",
     "lint:fix": "npm run lint -- --fix",
-    "test": "npm run test:core",
-    "test:core": "node scripts/run-jest.js --runInBand tests/unit/core/model/CodexModelProvider.test.ts tests/unit/core/agent/CodexSessionService.test.ts tests/unit/core/knowledge/SecondBrainInitializer.test.ts tests/unit/core/knowledge/InboxDigestService.test.ts tests/unit/core/knowledge/InboxCaptureService.test.ts tests/unit/core/commands/knowledgeCommands.test.ts tests/unit/core/wechat/WeChatStateStore.test.ts tests/unit/core/wechat/WeChatMediaService.test.ts tests/unit/core/wechat/WeChatDigestCommands.test.ts tests/unit/core/wechat/WeChatChannelService.test.ts tests/unit/core/wechat/IlinkClient.test.ts",
+    "test": "npm run test:core && npm run test:optimization && npm run test:public",
+    "test:optimization": "node scripts/run-jest.js --runInBand tests/unit/core/knowledge/OptimizationRegression.test.ts",
+    "test:core": "node scripts/run-jest.js --runInBand tests/unit/core/model/CodexModelProvider.test.ts tests/unit/core/agent/customInstructionsControl.test.ts tests/unit/core/agent/CodexSessionService.test.ts tests/unit/core/prompts/systemPrompt.test.ts tests/unit/features/chat/controllers/InputController.test.ts tests/unit/features/action/ActionWorkbenchModal.test.ts tests/unit/features/butler/MemoryButlerModal.test.ts tests/unit/core/knowledge/DailyNoteInfoService.test.ts tests/unit/core/knowledge/WorkLogService.test.ts tests/unit/core/knowledge/SecondBrainInitializer.test.ts tests/unit/core/knowledge/InboxDigestService.test.ts tests/unit/core/knowledge/InboxCaptureService.test.ts tests/unit/core/knowledge/ActionWorkbenchService.test.ts tests/unit/core/knowledge/ActionReminderService.test.ts tests/unit/core/knowledge/ProactiveReviewService.test.ts tests/unit/core/knowledge/ActionLifecycleService.test.ts tests/unit/core/knowledge/ProactiveInsightService.test.ts tests/unit/core/knowledge/LlmWikiService.test.ts tests/unit/core/commands/knowledgeCommands.test.ts tests/unit/core/wechat/WeChatStateStore.test.ts tests/unit/core/wechat/WeChatMediaService.test.ts tests/unit/core/wechat/WeChatDigestCommands.test.ts tests/unit/core/wechat/WeChatChannelService.test.ts tests/unit/core/wechat/WeChatCollaborationService.test.ts tests/unit/core/wechat/IlinkClient.test.ts",
     "test:all": "node scripts/run-jest.js",
     "test:watch": "node scripts/run-jest.js --watch",
     "test:coverage": "node scripts/run-jest.js --coverage",
-    "version": "node scripts/sync-version.js && git add manifest.json"
+    "version": "node scripts/sync-version.js && git add manifest.json",
+    "check:public": "node scripts/check-public.mjs",
+    "test:public": "node scripts/run-jest.js --runInBand tests/unit/public tests/unit/core/knowledge/VaultSearchIndex.test.ts tests/unit/utils/vaultNoteLinks.test.ts"
   },
   "keywords": [
     "codex",
@@ -28,15 +31,15 @@
     "productivity",
     "ide"
   ],
-  "author": "shanheju29259-spec",
+  "author": "Second Brain Evolution contributors",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shanheju29259-spec/obsidian-second-brain-evolution.git"
+    "url": "git+https://github.com/JaxonVolt/obsidian-second-brain-evolution.git"
   },
   "bugs": {
-    "url": "https://github.com/shanheju29259-spec/obsidian-second-brain-evolution/issues"
+    "url": "https://github.com/JaxonVolt/obsidian-second-brain-evolution/issues"
   },
-  "homepage": "https://github.com/shanheju29259-spec/obsidian-second-brain-evolution#readme",
+  "homepage": "https://github.com/JaxonVolt/obsidian-second-brain-evolution#readme",
   "license": "MIT",
   "devDependencies": {
     "@types/jest": "^30.0.0",
@@ -58,6 +61,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.63",
     "@modelcontextprotocol/sdk": "~1.25.3",
+    "lunar-javascript": "1.7.7",
     "qrcode": "^1.5.4",
     "tslib": "^2.8.1"
   },

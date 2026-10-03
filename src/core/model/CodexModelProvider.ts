@@ -14,7 +14,7 @@ export const CODEX_MODEL_PROVIDER_LABELS: Record<CodexModelProvider, string> = {
   codex: 'Codex 账户',
   ollama: 'Ollama（本地）',
   lmstudio: 'LM Studio（本地）',
-  custom: '自定义 Responses API',
+  custom: '自定义 Responses API（其他模型）',
 };
 
 export interface CodexRuntimeProfile {

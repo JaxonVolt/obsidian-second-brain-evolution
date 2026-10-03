@@ -92,9 +92,10 @@ status: active
 
 ## 沉淀与回流
 
-- 永久笔记候选：
-- 需要回到项目或领域的内容：
-- 仍需核实的问题：
+- 永久笔记：
+- 回到项目、领域或旧笔记：
+- 需要继续消化或核实：
+- 可以发展成输出：
 `;
 
 const PERMANENT_TEMPLATE = `---
@@ -239,11 +240,15 @@ status: active
 `,
   [`${SECOND_BRAIN_PATHS.rawInbox}/README.md`]: `# 原始输入
 
-插件的通用输入和微信文字会先原样保存在这里，确认分流后仍保留来源记录。
+插件按年、月和日期建立每日文件，并为每条通用输入或微信记录分配独立块编号。原文只追加、不改写，确认分流后仍保留来源记录。
+
+普通对话不会预加载本目录；当用户明确查询微信历史、原始记录或核对来源证据时，插件才会按关键词限量检索。
 `,
   [`${SECOND_BRAIN_PATHS.sourceInbox}/README.md`]: `# 来源资料
 
-保存尚未充分消化的文章、网页、书摘和外部资料。
+只保存主题、摘要、保留用途和下一步都相对明确，但尚未充分消化的文章、网页、书摘和外部资料。
+
+只有图片、附件或网址而没有上下文时，仅保留原始记录和真实附件，不额外生成资料壳笔记。
 `,
   [`${SECOND_BRAIN_PATHS.activeProjects}/README.md`]: `# 活跃项目
 
@@ -311,7 +316,7 @@ status: active
 
 保存已经结束且不需要继续行动的材料。
 `,
-  [`${SECOND_BRAIN_PATHS.templates}/每日笔记模板.md`]: DAILY_TEMPLATE,
+  [`${SECOND_BRAIN_PATHS.templates}/00_每日笔记模板.md`]: DAILY_TEMPLATE,
   [`${SECOND_BRAIN_PATHS.templates}/永久笔记模板.md`]: PERMANENT_TEMPLATE,
   [`${SECOND_BRAIN_PATHS.templates}/每周回顾模板.md`]: WEEKLY_TEMPLATE,
 };

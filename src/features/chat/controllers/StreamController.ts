@@ -17,6 +17,7 @@ import { formatDurationMmSs } from '../../../utils/date';
 import { extractDiffData } from '../../../utils/diff';
 import { getVaultPath } from '../../../utils/path';
 import { loadSubagentFinalResult, loadSubagentToolCalls } from '../../../utils/sdkSession';
+import { normalizeVaultNoteLinks } from '../../../utils/vaultNoteLinks';
 import { FLAVOR_TEXTS } from '../constants';
 import {
   appendThinkingContent,
@@ -410,17 +411,18 @@ export class StreamController {
     }
 
     state.currentTextContent += text;
-    await renderer.renderContent(state.currentTextEl, state.currentTextContent);
+    await renderer.renderContent(state.currentTextEl, normalizeVaultNoteLinks(state.currentTextContent, this.deps.plugin.app));
   }
 
   finalizeCurrentTextBlock(msg?: ChatMessage): void {
     const { state, renderer } = this.deps;
     if (msg && state.currentTextContent) {
       msg.contentBlocks = msg.contentBlocks || [];
-      msg.contentBlocks.push({ type: 'text', content: state.currentTextContent });
+      const content = normalizeVaultNoteLinks(state.currentTextContent, this.deps.plugin.app);
+      msg.contentBlocks.push({ type: 'text', content });
       // Copy button added here (not during streaming) to match history-loaded messages
       if (state.currentTextEl) {
-        renderer.addTextCopyButton(state.currentTextEl, state.currentTextContent);
+        renderer.addTextCopyButton(state.currentTextEl, content);
       }
     }
     state.currentTextEl = null;

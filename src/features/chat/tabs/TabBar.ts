@@ -5,11 +5,8 @@ export interface TabBarCallbacks {
   /** Called when a tab badge is clicked. */
   onTabClick: (tabId: TabId) => void;
 
-  /** Called when the close button is clicked on a tab. */
-  onTabClose: (tabId: TabId) => void;
-
-  /** Called when the new tab button is clicked. */
-  onNewTab: () => void;
+  /** Called when a tab badge is right-clicked. */
+  onTabContextMenu: (item: TabBarItem, event: MouseEvent) => void;
 }
 
 /**
@@ -18,6 +15,13 @@ export interface TabBarCallbacks {
 export class TabBar {
   private containerEl: HTMLElement;
   private callbacks: TabBarCallbacks;
+  private readonly wheelHandler = (event: WheelEvent): void => {
+    if (this.containerEl.scrollWidth <= this.containerEl.clientWidth) return;
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+
+    event.preventDefault();
+    this.containerEl.scrollLeft += event.deltaY;
+  };
 
   constructor(containerEl: HTMLElement, callbacks: TabBarCallbacks) {
     this.containerEl = containerEl;
@@ -28,6 +32,7 @@ export class TabBar {
   /** Builds the tab bar UI. */
   private build(): void {
     this.containerEl.addClass('claudian-tab-badges');
+    this.containerEl.addEventListener('wheel', this.wheelHandler, { passive: false });
   }
 
   /**
@@ -42,6 +47,9 @@ export class TabBar {
     for (const item of items) {
       this.renderBadge(item);
     }
+
+    const activeBadge = this.containerEl.querySelector('.claudian-tab-badge-active');
+    activeBadge?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }
 
   /** Renders a single tab badge. */
@@ -58,7 +66,7 @@ export class TabBar {
 
     const badgeEl = this.containerEl.createDiv({
       cls: `claudian-tab-badge ${stateClass}`,
-      text: String(item.index),
+      text: item.title,
     });
 
     // Tooltip with full title
@@ -70,17 +78,16 @@ export class TabBar {
       this.callbacks.onTabClick(item.id);
     });
 
-    // Right-click to close (if allowed)
-    if (item.canClose) {
-      badgeEl.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        this.callbacks.onTabClose(item.id);
-      });
-    }
+    badgeEl.addEventListener('contextmenu', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      this.callbacks.onTabContextMenu(item, event);
+    });
   }
 
   /** Destroys the tab bar. */
   destroy(): void {
+    this.containerEl.removeEventListener('wheel', this.wheelHandler);
     this.containerEl.empty();
     this.containerEl.removeClass('claudian-tab-badges');
   }

@@ -49,6 +49,7 @@ function createMockPlugin(overrides: Record<string, any> = {}): any {
       ...(overrides.settings || {}),
     },
     getConversationById: jest.fn().mockResolvedValue(null),
+    renameConversation: jest.fn().mockResolvedValue(undefined),
     getConversationList: jest.fn().mockReturnValue([]),
     findConversationAcrossViews: jest.fn().mockReturnValue(null),
     ...overrides,
@@ -571,6 +572,26 @@ describe('TabManager - Conversation Management', () => {
       );
     });
 
+    it('should not replace the fixed WeChat tab when the tab limit is reached', async () => {
+      const limitedPlugin = createMockPlugin({ settings: { maxTabs: 3 } });
+      const limitedManager = createManager({ plugin: limitedPlugin });
+      const fixedTab = await limitedManager.createTab();
+      fixedTab!.fixedTitle = '微信会话';
+      fixedTab!.conversationId = 'wechat-conv';
+      const switchTo = jest.fn().mockResolvedValue(undefined);
+      fixedTab!.controllers.conversationController = { switchTo } as any;
+      await limitedManager.createTab();
+      await limitedManager.createTab();
+      await limitedManager.switchToTab(fixedTab!.id);
+      switchTo.mockClear();
+
+      await limitedManager.openConversation('other-conv');
+
+      expect(limitedManager.getTabCount()).toBe(3);
+      expect(fixedTab!.conversationId).toBe('wechat-conv');
+      expect(switchTo).not.toHaveBeenCalled();
+    });
+
     it('should check for cross-view duplicates', async () => {
       plugin.findConversationAcrossViews.mockReturnValue({
         view: { leaf: { id: 'other-leaf' }, getTabManager: () => ({ switchToTab: jest.fn() }) },
@@ -592,6 +613,69 @@ describe('TabManager - Conversation Management', () => {
       await manager.createNewConversation();
 
       expect(createNew).toHaveBeenCalled();
+    });
+
+    it('should preserve a fixed WeChat tab and create a separate empty tab', async () => {
+      const activeTab = manager.getActiveTab();
+      const createNew = jest.fn().mockResolvedValue(undefined);
+      activeTab!.fixedTitle = '微信会话';
+      activeTab!.controllers.conversationController = { createNew } as any;
+
+      await manager.createNewConversation();
+
+      expect(createNew).not.toHaveBeenCalled();
+      expect(manager.getTabCount()).toBe(2);
+      expect(activeTab!.fixedTitle).toBe('微信会话');
+    });
+
+    it('should protect a fixed WeChat conversation tab from closing', async () => {
+      const manager = createManager();
+      const tab = await manager.createTab();
+      tab!.fixedTitle = '微信会话';
+      await manager.createTab();
+
+      await expect(manager.closeTab(tab!.id, true)).resolves.toBe(false);
+      expect(mockDestroyTab).not.toHaveBeenCalledWith(tab);
+    });
+  });
+
+  describe('renameTab', () => {
+    it('should rename an empty tab without creating a conversation', async () => {
+      const activeTab = manager.getActiveTab();
+
+      const renamed = await manager.renameTab(activeTab!.id, ' 入职准备 ');
+
+      expect(renamed).toBe(true);
+      expect(activeTab!.customTitle).toBe('入职准备');
+      expect(plugin.renameConversation).not.toHaveBeenCalled();
+    });
+
+    it('should rename the bound conversation and persist the tab label', async () => {
+      const activeTab = manager.getActiveTab();
+      activeTab!.conversationId = 'conv-123';
+
+      const renamed = await manager.renameTab(activeTab!.id, '项目复盘');
+
+      expect(renamed).toBe(true);
+      expect(plugin.renameConversation).toHaveBeenCalledWith('conv-123', '项目复盘');
+      expect(activeTab!.customTitle).toBe('项目复盘');
+    });
+
+    it('should reject an empty title', async () => {
+      const activeTab = manager.getActiveTab();
+
+      const renamed = await manager.renameTab(activeTab!.id, '   ');
+
+      expect(renamed).toBe(false);
+      expect(activeTab!.customTitle).toBeUndefined();
+    });
+
+    it('should protect the fixed WeChat conversation title', async () => {
+      const activeTab = manager.getActiveTab();
+      activeTab!.fixedTitle = '微信会话';
+
+      await expect(manager.renameTab(activeTab!.id, '其他名称')).resolves.toBe(false);
+      expect(plugin.renameConversation).not.toHaveBeenCalled();
     });
   });
 });
@@ -619,6 +703,16 @@ describe('TabManager - Persistence', () => {
       expect(state.activeTabId).toBeDefined();
       expect(state.openTabs[0]).toHaveProperty('tabId');
       expect(state.openTabs[0]).toHaveProperty('conversationId');
+    });
+
+    it('should persist a custom tab title', async () => {
+      await manager.createTab();
+      const tab = manager.getActiveTab()!;
+      await manager.renameTab(tab.id, '长期规划');
+
+      const state = manager.getPersistedState();
+
+      expect(state.openTabs[0].customTitle).toBe('长期规划');
     });
   });
 
@@ -653,6 +747,23 @@ describe('TabManager - Persistence', () => {
       await manager.restoreState(persistedState);
 
       expect(manager.getActiveTabId()).toBe('restored-2');
+    });
+
+    it('should restore a custom tab title', async () => {
+      mockCreateTab.mockImplementation((opts: any) =>
+        createMockTabData({ id: opts.tabId || 'default-tab' })
+      );
+      const persistedState: PersistedTabManagerState = {
+        openTabs: [
+          { tabId: 'restored-1', conversationId: null, customTitle: '恢复后的标签' },
+        ],
+        activeTabId: 'restored-1',
+      };
+
+      await manager.restoreState(persistedState);
+
+      expect(mockCreateTab).toHaveBeenCalledWith(expect.objectContaining({ tabId: 'restored-1' }));
+      expect(manager.getTab('restored-1')?.customTitle).toBe('恢复后的标签');
     });
 
     it('should create default tab if no tabs restored', async () => {

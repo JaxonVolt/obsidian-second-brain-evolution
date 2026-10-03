@@ -1354,6 +1354,9 @@ export async function destroyTab(tab: TabData): Promise<void> {
  * Uses synchronous access since we only need the title, not messages.
  */
 export function getTabTitle(tab: TabData, plugin: ClaudianPlugin): string {
+  if (tab.customTitle) {
+    return tab.customTitle;
+  }
   if (tab.conversationId) {
     const conversation = plugin.getConversationSync(tab.conversationId);
     if (conversation?.title) {

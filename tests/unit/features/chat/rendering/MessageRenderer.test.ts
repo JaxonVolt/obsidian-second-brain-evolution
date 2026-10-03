@@ -39,11 +39,11 @@ function createMockComponent() {
   };
 }
 
-function createRenderer(messagesEl?: any) {
+function createRenderer(messagesEl?: any, app: any = {}) {
   const el = messagesEl ?? createMockEl();
   const comp = createMockComponent();
   const plugin = {
-    app: {},
+    app,
     settings: { mediaFolder: '' },
   };
   return { renderer: new MessageRenderer(plugin as any, comp as any, el), messagesEl: el };
@@ -52,6 +52,24 @@ function createRenderer(messagesEl?: any) {
 describe('MessageRenderer', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
+
+  it('revalidates stored assistant references without rewriting user text', () => {
+    const file = { path: '资料/使用指南.md', name: '使用指南.md', basename: '使用指南', extension: 'md' };
+    const plugin = {
+      settings: { mediaFolder: '' },
+      app: { vault: {
+        adapter: { basePath: 'F:/Example Vault' },
+        getFiles: () => [file],
+        getFileByPath: (path: string) => path === file.path ? file : null,
+      } },
+    };
+    const renderer = new MessageRenderer(plugin as any, createMockComponent() as any, createMockEl());
+    const render = jest.spyOn(renderer, 'renderContent').mockResolvedValue();
+    renderer.renderStoredMessage({ id: 'assistant', role: 'assistant', timestamp: 1, content: '使用指南' });
+    expect(render).toHaveBeenLastCalledWith(expect.anything(), '[[资料/使用指南|使用指南]]');
+    renderer.renderStoredMessage({ id: 'user', role: 'user', timestamp: 2, content: '使用指南' });
+    expect(render).toHaveBeenLastCalledWith(expect.anything(), '使用指南');
   });
 
   // ============================================
@@ -963,6 +981,23 @@ describe('MessageRenderer', () => {
         writable: true,
         configurable: true,
       });
+    });
+
+    it('copies verified wikilinks instead of the original bare path', async () => {
+      const file = { path: '资料/使用指南.md', name: '使用指南.md', basename: '使用指南', extension: 'md' };
+      const { renderer } = createRenderer(undefined, { vault: {
+        adapter: { basePath: 'F:/Example Vault' },
+        getFiles: () => [file],
+        getFileByPath: (path: string) => path === file.path ? file : null,
+      } });
+      const textEl = createMockEl();
+      const writeText = jest.fn().mockResolvedValue(undefined);
+      Object.defineProperty(globalThis, 'navigator', {
+        value: { clipboard: { writeText } }, writable: true, configurable: true,
+      });
+      renderer.addTextCopyButton(textEl, '`资料/使用指南.md`');
+      await textEl.children[0]._eventListeners.get('click')![0]({ stopPropagation: jest.fn() });
+      expect(writeText).toHaveBeenCalledWith('[[资料/使用指南|使用指南]]');
     });
 
     it('click should copy and show feedback', async () => {

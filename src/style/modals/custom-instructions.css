@@ -1,0 +1,68 @@
+.second-brain-custom-instructions-modal {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.second-brain-custom-instructions-intro {
+  margin: 0 0 12px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.6;
+}
+
+.second-brain-custom-instructions-section-title {
+  margin: 14px 0 2px;
+  font-size: var(--font-ui-medium);
+}
+
+.second-brain-custom-instructions-section-desc {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-custom-instructions-input {
+  display: block;
+  width: 100%;
+  min-height: 180px;
+  max-height: min(34vh, 340px);
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.65;
+}
+
+.second-brain-custom-instructions-input-secondary {
+  min-height: 120px;
+}
+
+.second-brain-custom-instructions-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.second-brain-custom-instructions-counter {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+  font-variant-numeric: tabular-nums;
+}
+
+.second-brain-custom-instructions-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.claudian-custom-instructions-btn.is-active {
+  color: var(--text-accent);
+}
+
+@media (max-width: 520px) {
+  .second-brain-custom-instructions-input {
+    min-height: 150px;
+  }
+
+  .second-brain-custom-instructions-input-secondary {
+    min-height: 110px;
+  }
+}

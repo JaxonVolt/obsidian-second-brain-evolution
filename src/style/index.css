@@ -49,6 +49,11 @@
 @import "./modals/inbox-routing.css";
 @import "./modals/wechat-connect.css";
 @import "./modals/onboarding.css";
+@import "./modals/proactive-review.css";
+@import "./modals/proactive-insight.css";
+@import "./modals/custom-instructions.css";
+@import "./modals/action-workbench.css";
+@import "./modals/memory-butler.css";
 
 /* Settings */
 @import "./settings/base.css";

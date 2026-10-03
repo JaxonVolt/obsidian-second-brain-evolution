@@ -1,0 +1,299 @@
+.second-brain-butler-modal {
+  width: min(920px, calc(100vw - 40px));
+  height: min(760px, calc(100vh - 48px));
+}
+
+.second-brain-butler-modal .modal-content,
+.second-brain-butler-body {
+  min-height: 0;
+  height: 100%;
+}
+
+.second-brain-butler-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.second-brain-butler-header,
+.second-brain-butler-summary,
+.second-brain-butler-header-controls,
+.second-brain-butler-tabs,
+.second-brain-butler-tabs button,
+.second-brain-butler-card-header,
+.second-brain-butler-actions,
+.second-brain-butler-loading,
+.second-brain-butler-empty,
+.second-brain-butler-footer,
+.second-brain-butler-setting-row,
+.second-brain-butler-settings-description {
+  display: flex;
+  align-items: center;
+}
+
+.second-brain-butler-header {
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.second-brain-butler-summary,
+.second-brain-butler-settings-description {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.second-brain-butler-summary strong {
+  font-size: 18px;
+}
+
+.second-brain-butler-summary span,
+.second-brain-butler-settings-description span,
+.second-brain-butler-footer {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-butler-header-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.second-brain-butler-header-controls button {
+  gap: 6px;
+}
+
+.second-brain-butler-tabs {
+  gap: 5px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.second-brain-butler-tabs button {
+  flex: 0 0 auto;
+  gap: 7px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.second-brain-butler-tabs button.is-active {
+  border-bottom-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.second-brain-butler-tabs button span:last-child {
+  color: var(--text-muted);
+}
+
+.second-brain-butler-list {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.second-brain-butler-card {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.second-brain-butler-card:hover {
+  background: var(--background-modifier-hover);
+}
+
+.second-brain-butler-card-header {
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.second-brain-butler-card-header > span {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-butler-card-header strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.second-brain-butler-question,
+.second-brain-butler-suggestion {
+  margin-top: 7px;
+  line-height: 1.55;
+}
+
+.second-brain-butler-observation {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-yellow);
+  background: color-mix(in srgb, var(--color-yellow) 10%, transparent);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.second-brain-butler-observation.is-ready {
+  border-left-color: var(--color-orange);
+  color: var(--text-normal);
+}
+
+.second-brain-butler-result {
+  color: var(--text-success);
+  font-weight: 600;
+}
+
+.second-brain-insight-resolution-modal,
+.second-brain-insight-sources-modal {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.second-brain-insight-resolution-modal .setting-item {
+  align-items: flex-start;
+}
+
+.second-brain-insight-resolution-modal .setting-item-control {
+  width: min(430px, 58%);
+}
+
+.second-brain-insight-resolution-modal input,
+.second-brain-insight-resolution-modal textarea {
+  width: 100%;
+}
+
+.second-brain-insight-source-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.second-brain-insight-source-row strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.second-brain-insight-source-row blockquote {
+  margin: 8px 0;
+  color: var(--text-muted);
+}
+
+@media (max-width: 700px) {
+  .second-brain-insight-resolution-modal .setting-item {
+    display: block;
+  }
+
+  .second-brain-insight-resolution-modal .setting-item-control {
+    width: 100%;
+    margin-top: 8px;
+  }
+}
+
+.second-brain-butler-suggestion {
+  color: var(--text-muted);
+}
+
+.second-brain-butler-evidence {
+  margin-top: 8px;
+}
+
+.second-brain-butler-evidence summary {
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-butler-evidence button {
+  display: block;
+  max-width: 100%;
+  margin-top: 7px;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-accent);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.second-brain-butler-evidence blockquote {
+  margin: 7px 0 0;
+  color: var(--text-muted);
+}
+
+.second-brain-butler-actions {
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.second-brain-butler-due-date {
+  min-width: 142px;
+}
+
+.second-brain-butler-loading,
+.second-brain-butler-empty,
+.second-brain-butler-error {
+  min-height: 220px;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.second-brain-butler-footer {
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.second-brain-butler-footer button {
+  flex: 0 0 auto;
+}
+
+.second-brain-butler-settings-modal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.second-brain-butler-settings-description {
+  margin-bottom: 14px;
+}
+
+.second-brain-butler-setting-row {
+  justify-content: space-between;
+  min-height: 46px;
+  gap: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+@media (max-width: 640px) {
+  .second-brain-butler-modal {
+    width: calc(100vw - 16px);
+    height: calc(100vh - 20px);
+  }
+
+  .second-brain-butler-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .second-brain-butler-header-controls {
+    justify-content: flex-start;
+  }
+
+  .second-brain-butler-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .second-brain-butler-actions select,
+  .second-brain-butler-actions button:not(.clickable-icon) {
+    max-width: 100%;
+    flex: 1 1 130px;
+  }
+}

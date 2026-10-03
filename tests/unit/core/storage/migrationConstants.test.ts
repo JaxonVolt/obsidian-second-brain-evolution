@@ -30,6 +30,7 @@ describe('migrationConstants', () => {
       expect(CLAUDIAN_ONLY_FIELDS.has('excludedTags')).toBe(true);
       expect(CLAUDIAN_ONLY_FIELDS.has('mediaFolder')).toBe(true);
       expect(CLAUDIAN_ONLY_FIELDS.has('systemPrompt')).toBe(true);
+      expect(CLAUDIAN_ONLY_FIELDS.has('wechatAdditionalInstructions')).toBe(true);
       expect(CLAUDIAN_ONLY_FIELDS.has('allowedExportPaths')).toBe(true);
       expect(CLAUDIAN_ONLY_FIELDS.has('persistentExternalContextPaths')).toBe(true);
     });
@@ -77,6 +78,11 @@ describe('migrationConstants', () => {
     it('contains environment fields including legacy env', () => {
       expect(MIGRATABLE_CLAUDIAN_FIELDS.has('environmentVariables')).toBe(true);
       expect(MIGRATABLE_CLAUDIAN_FIELDS.has('env')).toBe(true);
+    });
+
+    it('contains both shared and WeChat-only custom instruction fields', () => {
+      expect(MIGRATABLE_CLAUDIAN_FIELDS.has('systemPrompt')).toBe(true);
+      expect(MIGRATABLE_CLAUDIAN_FIELDS.has('wechatAdditionalInstructions')).toBe(true);
     });
 
     it('contains codex CLI fields', () => {

@@ -7,8 +7,7 @@ import type { TabBarItem } from '@/features/chat/tabs/types';
 function createMockCallbacks(): TabBarCallbacks {
   return {
     onTabClick: jest.fn(),
-    onTabClose: jest.fn(),
-    onNewTab: jest.fn(),
+    onTabContextMenu: jest.fn(),
   };
 }
 
@@ -79,14 +78,14 @@ describe('TabBar', () => {
   });
 
   describe('badge rendering', () => {
-    it('should display index number as text', () => {
+    it('should display the tab title as text', () => {
       const containerEl = createMockEl();
       const callbacks = createMockCallbacks();
       const tabBar = new TabBar(containerEl, callbacks);
 
-      tabBar.update([createTabBarItem({ index: 5 })]);
+      tabBar.update([createTabBarItem({ index: 5, title: '项目复盘' })]);
 
-      expect(containerEl._children[0].textContent).toBe('5');
+      expect(containerEl._children[0].textContent).toBe('项目复盘');
     });
 
     it('should set title tooltip from item title', () => {
@@ -190,7 +189,7 @@ describe('TabBar', () => {
       expect(callbacks.onTabClick).toHaveBeenCalledWith('clicked-tab');
     });
 
-    it('should call onTabClose on right-click when canClose is true', () => {
+    it('should open the tab context menu instead of deleting on right-click', () => {
       const containerEl = createMockEl();
       const callbacks = createMockCallbacks();
       const tabBar = new TabBar(containerEl, callbacks);
@@ -198,22 +197,61 @@ describe('TabBar', () => {
       tabBar.update([createTabBarItem({ id: 'closeable-tab', canClose: true })]);
 
       // Simulate right-click (contextmenu)
-      const mockEvent = { preventDefault: jest.fn() };
+      const mockEvent = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
       containerEl._children[0].dispatchEvent('contextmenu', mockEvent);
 
       expect(mockEvent.preventDefault).toHaveBeenCalled();
-      expect(callbacks.onTabClose).toHaveBeenCalledWith('closeable-tab');
+      expect(mockEvent.stopPropagation).toHaveBeenCalled();
+      expect(callbacks.onTabContextMenu).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'closeable-tab' }),
+        mockEvent,
+      );
     });
 
-    it('should not register contextmenu handler when canClose is false', () => {
+    it('should still open the menu for an uncloseable tab so it can be renamed', () => {
       const containerEl = createMockEl();
       const callbacks = createMockCallbacks();
       const tabBar = new TabBar(containerEl, callbacks);
 
       tabBar.update([createTabBarItem({ id: 'uncloseable-tab', canClose: false })]);
 
-      // Check that contextmenu handler was not registered
-      expect(containerEl._children[0]._eventListeners.has('contextmenu')).toBe(false);
+      const mockEvent = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+      containerEl._children[0].dispatchEvent('contextmenu', mockEvent);
+
+      expect(callbacks.onTabContextMenu).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'uncloseable-tab', canClose: false }),
+        mockEvent,
+      );
+    });
+  });
+
+  describe('horizontal scrolling', () => {
+    it('should translate vertical wheel movement into horizontal scrolling when tabs overflow', () => {
+      const containerEl = createMockEl();
+      containerEl.scrollWidth = 600;
+      containerEl.clientWidth = 240;
+      containerEl.scrollLeft = 20;
+      const tabBar = new TabBar(containerEl, createMockCallbacks());
+      const event = { deltaX: 0, deltaY: 80, preventDefault: jest.fn() };
+
+      containerEl.dispatchEvent('wheel', event);
+
+      expect(event.preventDefault).toHaveBeenCalled();
+      expect(containerEl.scrollLeft).toBe(100);
+      tabBar.destroy();
+    });
+
+    it('should preserve normal page scrolling when tabs do not overflow', () => {
+      const containerEl = createMockEl();
+      containerEl.scrollWidth = 200;
+      containerEl.clientWidth = 240;
+      const tabBar = new TabBar(containerEl, createMockCallbacks());
+      const event = { deltaX: 0, deltaY: 80, preventDefault: jest.fn() };
+
+      containerEl.dispatchEvent('wheel', event);
+
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      tabBar.destroy();
     });
   });
 

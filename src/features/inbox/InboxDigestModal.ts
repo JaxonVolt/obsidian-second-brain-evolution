@@ -85,7 +85,7 @@ export class InboxDigestModal extends Modal {
       apply.setText('正在归位…');
       try {
         const result = await this.service.apply(this.proposals);
-        new Notice(`归位完成：新建 ${result.created.length}，更新 ${result.updated.length}。`);
+        new Notice(`处理完成：新建 ${result.created.length}，更新 ${result.updated.length}，复用 ${result.reused.length}，仅留原始 ${result.retained.length}。`);
         this.close();
       } catch (error) {
         new Notice(error instanceof Error ? error.message : String(error));
@@ -119,6 +119,9 @@ export class InboxDigestModal extends Modal {
       if (proposal.category === 'inbox') {
         proposal.selected = false;
         checkbox.checked = false;
+      } else {
+        proposal.selected = true;
+        checkbox.checked = true;
       }
     });
 

@@ -3,6 +3,7 @@ import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 
 import { CodexSessionService } from '@/core/agent/CodexSessionService';
+import { buildCodexDeveloperInstructions, CUSTOM_INSTRUCTIONS_CONTROL_PROMPT } from '@/core/agent/customInstructionsControl';
 import type { McpServerManager } from '@/core/mcp';
 import type ClaudianPlugin from '@/main';
 import { detectCodexCliCapabilities } from '@/utils/codexCli';
@@ -86,6 +87,7 @@ describe('CodexSessionService', () => {
         codexModel: '',
         codexReasoningEffort: '',
         codexPlanModeReasoningEffort: '',
+        systemPrompt: '',
       },
       getActiveEnvironmentVariables: jest.fn().mockReturnValue(''),
       getResolvedCodexCliPath: jest.fn().mockReturnValue('/usr/local/bin/codex'),
@@ -100,6 +102,26 @@ describe('CodexSessionService', () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  it('uses bounded history only with an existing transcript and preserves the current request exactly once', async () => {
+    const adapter = mockPlugin.app!.vault.adapter as unknown as { exists: jest.Mock };
+    adapter.exists = jest.fn().mockResolvedValue(true);
+    const history = Array.from({ length: 40 }, (_, i) => ({ id: `m-${i}`, role: 'user' as const,
+      timestamp: i, content: `历史要求${i} ${'重复材料'.repeat(3000)}`, displayContent: `历史要求${i}` }));
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+    const chunks = collectChunks(service.query('CURRENT_REQUEST_UNIQUE', undefined, history,
+      { historySourcePath: '.second-brain/runtime/sessions/conv-test.jsonl' }));
+    await new Promise((resolve) => setImmediate(resolve));
+    proc.stdout.end(); proc.stderr.end(); proc.emit('close', 0, null);
+    await chunks;
+    expect(adapter.exists).toHaveBeenCalledWith('.second-brain/runtime/sessions/conv-test.jsonl');
+    expect(proc.written()).toContain('<conversation_recovery');
+    expect(proc.written()).toContain('m-39');
+    expect(proc.written().match(/CURRENT_REQUEST_UNIQUE/gu)).toHaveLength(1);
+    expect(proc.written()).not.toContain('重复材料');
+    expect(proc.written().length).toBeLessThan(25_000);
   });
 
   it('maps Codex JSONL events into stream chunks', async () => {
@@ -417,6 +439,105 @@ describe('CodexSessionService', () => {
     expect(spawnArgs.filter((arg) => arg === '--model')).toHaveLength(1);
   });
 
+  it('injects custom instructions as a developer-level Codex config without changing the visible prompt', async () => {
+    (mockPlugin.settings as any).systemPrompt = '默认使用中文。\n先给结论，再说明依据。';
+
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('只回答当前问题'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-custom-instructions"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    const developerConfig = `developer_instructions=${JSON.stringify(buildCodexDeveloperInstructions((mockPlugin.settings as any).systemPrompt))}`;
+    const configIndex = args.indexOf(developerConfig);
+
+    expect(configIndex).toBeGreaterThan(0);
+    expect(args[configIndex - 1]).toBe('-c');
+    expect(configIndex).toBeLessThan(args.indexOf('exec'));
+    expect(proc.written()).toBe('只回答当前问题');
+  });
+
+  it('keeps the protected plugin control protocol when custom instructions are blank', async () => {
+    (mockPlugin.settings as any).systemPrompt = '   \n  ';
+
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('No custom instructions'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-no-custom-instructions"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    const developerArg = args.find((arg: string) => arg.startsWith('developer_instructions='));
+    expect(JSON.parse(developerArg!.slice('developer_instructions='.length))).toContain(CUSTOM_INSTRUCTIONS_CONTROL_PROMPT);
+  });
+
+  it('adds channel-only developer instructions without changing shared settings or the visible prompt', async () => {
+    (mockPlugin.settings as any).systemPrompt = '共享规则';
+    (mockPlugin.settings as any).wechatAdditionalInstructions = '微信端保持简洁';
+
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('微信问题', undefined, undefined, {
+      additionalDeveloperInstructions: (mockPlugin.settings as any).wechatAdditionalInstructions,
+      sandboxMode: 'read-only',
+    }));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-wechat-instructions"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    expect(args).toContain(
+      `developer_instructions=${JSON.stringify(buildCodexDeveloperInstructions('共享规则', '微信端保持简洁'))}`,
+    );
+    expect(proc.written()).toBe('微信问题');
+    expect((mockPlugin.settings as any).systemPrompt).toBe('共享规则');
+  });
+
+  it('keeps custom instructions enabled when resuming a Codex conversation', async () => {
+    (mockPlugin.settings as any).systemPrompt = '始终核对近期对话。';
+    service.setSessionId('session-existing');
+
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('继续处理'));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"session-existing"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    expect(args).toContain('resume');
+    expect(args).toContain(
+      `developer_instructions=${JSON.stringify(buildCodexDeveloperInstructions('始终核对近期对话。'))}`,
+    );
+  });
+
   it('uses Terra with medium reasoning in fast mode', async () => {
     (mockPlugin.settings as any).codexPerformanceMode = 'fast';
 
@@ -443,5 +564,31 @@ describe('CodexSessionService', () => {
       ]),
       expect.any(Object),
     );
+  });
+
+  it('allows the WeChat caller to use deep mode in a read-only sandbox without changing global settings', async () => {
+    (mockPlugin.settings as any).codexPerformanceMode = 'fast';
+    const proc = createMockChildProcess();
+    spawnMock.mockReturnValue(proc as unknown as ReturnType<typeof spawn>);
+
+    const chunksPromise = collectChunks(service.query('Deep read-only question', undefined, undefined, {
+      performanceMode: 'deep',
+      sandboxMode: 'read-only',
+    }));
+    await new Promise((resolve) => setImmediate(resolve));
+
+    proc.stdout.write('{"type":"thread.started","thread_id":"thread-wechat-deep"}\n');
+    proc.stdout.end();
+    proc.stderr.end();
+    proc.emit('close', 0, null);
+    await chunksPromise;
+
+    const args = spawnMock.mock.calls[0]?.[1] ?? [];
+    const sandboxIndex = args.indexOf('-s');
+    const modelIndex = args.indexOf('--model');
+    expect(args[sandboxIndex + 1]).toBe('read-only');
+    expect(args[modelIndex + 1]).toBe('gpt-5.6-sol');
+    expect(args).toContain('model_reasoning_effort="high"');
+    expect((mockPlugin.settings as any).codexPerformanceMode).toBe('fast');
   });
 });

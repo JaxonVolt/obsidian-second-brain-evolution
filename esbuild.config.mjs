@@ -47,8 +47,9 @@ const copyToObsidian = {
 
 const context = await esbuild.context({
   entryPoints: ['src/main.ts'],
+  banner: { js: `/*\n${readFileSync('LICENSE', 'utf8')}\n${readFileSync('NOTICE.md', 'utf8')}\n*/` },
   bundle: true,
-  plugins: [copyToObsidian],
+  plugins: prod ? [] : [copyToObsidian],
   external: [
     'obsidian',
     'electron',

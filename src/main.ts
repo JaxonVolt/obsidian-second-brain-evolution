@@ -10,10 +10,29 @@
 import { Notice, Plugin } from 'obsidian';
 
 import type { AgentManager } from './core/agents';
+import { DailyNoteInfoService } from './core/knowledge/DailyNoteInfoService';
+import {
+  ActionLifecycleService,
+  type ActionLifecycleRecord,
+} from './core/knowledge/ActionLifecycleService';
+import { ActionReminderService } from './core/knowledge/ActionReminderService';
+import { ActionWorkbenchService, recurrenceLabel } from './core/knowledge/ActionWorkbenchService';
 import { InboxCaptureService } from './core/knowledge/InboxCaptureService';
 import { InboxDigestService } from './core/knowledge/InboxDigestService';
 import { ensureKnowledgeRuntime } from './core/knowledge/KnowledgeRuntime';
+import { LlmWikiService } from './core/knowledge/LlmWikiService';
+import { WorkLogService } from './core/knowledge/WorkLogService';
+import {
+  type InsightRecord,
+  ProactiveInsightService,
+} from './core/knowledge/ProactiveInsightService';
+import {
+  ProactiveReviewService,
+  type ReviewItem,
+  type ReviewScanResult,
+} from './core/knowledge/ProactiveReviewService';
 import { SecondBrainInitializer } from './core/knowledge/SecondBrainInitializer';
+import { getConfiguredModel } from './core/model';
 import { WeChatChannelService } from './core/wechat/WeChatChannelService';
 import { McpServerManager } from './core/mcp';
 import type { PluginManager } from './core/plugins';
@@ -31,6 +50,7 @@ import type {
 import {
   BACKEND_CLAUDE,
   BACKEND_CODEX,
+  CODEX_PERFORMANCE_PROFILES,
   DEFAULT_CLAUDE_MODELS,
   DEFAULT_SETTINGS,
   getBackendCapabilities,
@@ -40,8 +60,12 @@ import {
   VIEW_TYPE_CLAUDIAN,
 } from './core/types';
 import { ClaudianView } from './features/chat/ClaudianView';
+import { updateTabBackendUI } from './features/chat/tabs/Tab';
+import { ActionWorkbenchModal } from './features/action/ActionWorkbenchModal';
 import { InboxDigestModal } from './features/inbox/InboxDigestModal';
+import { MemoryButlerModal } from './features/butler/MemoryButlerModal';
 import { SecondBrainOnboardingModal } from './features/onboarding/SecondBrainOnboardingModal';
+import { DecisionCreateModal } from './features/review/DecisionCreateModal';
 import { SecondBrainSettingTab } from './features/settings/SecondBrainSettings';
 import { WeChatConnectModal } from './features/wechat/WeChatConnectModal';
 import { setLocale } from './i18n';
@@ -71,7 +95,20 @@ export default class ClaudianPlugin extends Plugin {
   private conversations: Conversation[] = [];
   private runtimeEnvironmentVariables = '';
   private inboxCaptureService: InboxCaptureService;
+  private dailyNoteInfoService: DailyNoteInfoService;
+  private workLogService: WorkLogService;
   private knowledgeInitializer: SecondBrainInitializer;
+  private proactiveReviewService: ProactiveReviewService;
+  private actionLifecycleService: ActionLifecycleService;
+  actionWorkbenchService: ActionWorkbenchService;
+  private actionReminderService: ActionReminderService;
+  private proactiveReviewCount = 0;
+  private proactiveReviewRibbonEl: HTMLElement | null = null;
+  private proactiveReviewRefreshTimer: number | null = null;
+  private proactiveInsightService: ProactiveInsightService;
+  private proactiveInsightCount = 0;
+  private proactiveInsightRibbonEl: HTMLElement | null = null;
+  llmWikiService: LlmWikiService;
   weChatService: WeChatChannelService;
 
   async onload() {
@@ -79,6 +116,36 @@ export default class ClaudianPlugin extends Plugin {
     await ensureKnowledgeRuntime(this.app);
     this.knowledgeInitializer = new SecondBrainInitializer(this.app);
     this.inboxCaptureService = new InboxCaptureService(this.app);
+    this.dailyNoteInfoService = new DailyNoteInfoService(this.app, () => ({
+      enabled: this.settings.dailyInfoEnabled,
+    }));
+    this.workLogService = new WorkLogService(this.app);
+    this.actionWorkbenchService = new ActionWorkbenchService(this.app);
+    this.actionReminderService = new ActionReminderService(this.app, this.actionWorkbenchService);
+    this.proactiveReviewService = new ProactiveReviewService(this.app, () => ({
+      enabled: this.settings.proactiveReviewEnabled,
+      projectStaleDays: this.settings.proactiveReviewProjectStaleDays,
+      weeklyActionDays: this.settings.proactiveReviewWeeklyActionDays,
+      maxVisible: this.settings.proactiveReviewMaxVisible,
+      startupNotice: this.settings.proactiveReviewStartupNotice,
+    }));
+    this.actionLifecycleService = new ActionLifecycleService(this.app, this, () => ({
+      enabled: this.settings.proactiveReviewEnabled,
+      viewportItems: this.settings.proactiveReviewMaxVisible,
+    }));
+    this.proactiveInsightService = new ProactiveInsightService(this.app, this, () => ({
+      enabled: this.settings.proactiveInsightsEnabled,
+      autoAnalyze: this.settings.proactiveInsightsAutoAnalyze,
+      minChangedNotes: this.settings.proactiveInsightsMinChangedNotes,
+      dailyLimit: this.settings.proactiveInsightsDailyLimit,
+      viewportItems: this.settings.proactiveInsightsViewportItems,
+      startupNotice: this.settings.proactiveInsightsStartupNotice,
+    }));
+    this.llmWikiService = new LlmWikiService(
+      this.app,
+      () => this.settings,
+      () => this.getResolvedCodexCliPath(),
+    );
     this.weChatService = new WeChatChannelService(this);
 
     // Initialize MCP manager (shared for agent + UI)
@@ -93,6 +160,23 @@ export default class ClaudianPlugin extends Plugin {
     this.addRibbonIcon('brain-circuit', '打开第二大脑', () => {
       this.activateView();
     });
+    this.addRibbonIcon('briefcase-business', '打开或创建今天的工作日志', () => {
+      void this.openTodayWorkLog();
+    });
+    this.proactiveReviewRibbonEl = this.addRibbonIcon('list-checks', '行动工作台', () => {
+      this.openActionWorkbench();
+    });
+    if (this.proactiveReviewRibbonEl) {
+      this.proactiveReviewRibbonEl.addClass('second-brain-review-ribbon');
+      this.proactiveReviewRibbonEl.dataset.reviewCount = '0';
+    }
+    this.proactiveInsightRibbonEl = this.addRibbonIcon('bell-ring', '记忆管家', () => {
+      this.openProactiveInsights();
+    });
+    if (this.proactiveInsightRibbonEl) {
+      this.proactiveInsightRibbonEl.addClass('second-brain-insight-ribbon');
+      this.proactiveInsightRibbonEl.dataset.insightCount = '0';
+    }
 
     this.addCommand({
       id: 'open-view',
@@ -104,9 +188,10 @@ export default class ClaudianPlugin extends Plugin {
 
     const knowledgeCommands = [
       { id: 'open-today-note', name: '打开或创建今日日记', command: 'today' },
-      { id: 'knowledge-dashboard', name: '知识演化：今日驾驶舱', command: 'dashboard' },
+      { id: 'open-today-work-log', name: '打开或创建今天的工作日志', command: 'work-log' },
+      { id: 'knowledge-organize-recent-logs', name: '知识演化：整理近期日志', command: 'organize-recent-logs' },
       { id: 'knowledge-digest', name: '知识演化：消化收件箱', command: 'digest' },
-      { id: 'knowledge-weekly', name: '知识演化：每周回顾', command: 'weekly' },
+      { id: 'knowledge-current-status', name: '知识演化：分析现状', command: 'current-status' },
       { id: 'knowledge-health-check', name: '知识演化：系统体检', command: 'health-check' },
     ];
     for (const item of knowledgeCommands) {
@@ -118,12 +203,6 @@ export default class ClaudianPlugin extends Plugin {
     }
 
     this.addCommand({
-      id: 'knowledge-ask-vault',
-      name: '知识演化：问问知识库',
-      callback: () => { void this.prefillKnowledgeCommand('ask-vault'); },
-    });
-
-    this.addCommand({
       id: 'capture-to-inbox',
       name: '将输入存入收件箱',
       callback: () => { void this.focusCaptureInput(); },
@@ -133,6 +212,55 @@ export default class ClaudianPlugin extends Plugin {
       id: 'initialize-second-brain',
       name: '初始化或补全第二大脑骨架',
       callback: () => this.openKnowledgeInitializer(),
+    });
+
+    this.addCommand({
+      id: 'proactive-review',
+      name: '行动工作台：打开',
+      callback: () => this.openActionWorkbench(),
+    });
+
+    this.addCommand({
+      id: 'proactive-review-scan-now',
+      name: '行动与复盘：立即核对',
+      callback: () => { void this.runProactiveReviewCheck(true); },
+    });
+
+    this.addCommand({
+      id: 'create-tracked-decision',
+      name: '行动与复盘：记录一项决策',
+      callback: () => {
+        new DecisionCreateModal(this.app, this.proactiveReviewService, () => {
+          void this.runProactiveReviewCheck(false, false);
+        }).open();
+      },
+    });
+
+    this.addCommand({
+      id: 'open-proactive-insights',
+      name: '记忆管家：打开',
+      callback: () => this.openProactiveInsights(),
+    });
+
+    this.addCommand({
+      id: 'connect-long-term-memory',
+      name: '长期记忆库：连接或刷新状态',
+      callback: async () => {
+        const status = await this.llmWikiService.start();
+        new Notice(status.detail);
+      },
+    });
+
+    this.addCommand({
+      id: 'generate-proactive-insights',
+      name: '主动洞察：分析新增和修改笔记',
+      callback: () => { void this.generateProactiveInsights(false, true); },
+    });
+
+    this.addCommand({
+      id: 'analyze-existing-knowledge',
+      name: '主动洞察：分析现有知识库',
+      callback: () => { void this.generateProactiveInsights(true, true); },
     });
 
     this.addCommand({
@@ -216,12 +344,66 @@ export default class ClaudianPlugin extends Plugin {
     });
 
     this.addSettingTab(new SecondBrainSettingTab(this.app, this));
-    this.app.workspace.onLayoutReady(() => { void this.maybeShowKnowledgeInitializer(); });
+    const invalidateRecord = (path: string) => {
+      this.actionWorkbenchService.handleVaultChange(path);
+      this.llmWikiService.invalidate(path);
+    };
+    this.registerEvent(this.app.vault.on('create', (file) => invalidateRecord(file.path)));
+    this.register(() => this.actionWorkbenchService.dispose());
+    this.registerEvent(this.app.vault.on('modify', (file) => invalidateRecord(file.path)));
+    this.registerEvent(this.app.vault.on('delete', (file) => invalidateRecord(file.path)));
+    this.registerEvent(this.app.vault.on('rename', (file, oldPath) => {
+      invalidateRecord(oldPath);
+      invalidateRecord(file.path);
+    }));
+    this.registerEvent(this.app.workspace.on('file-open', (file) => {
+      if (file) void this.dailyNoteInfoService.ensureForFile(file);
+    }));
+    this.registerEvent(this.app.vault.on('modify', (file) => {
+      if (!this.settings.proactiveReviewEnabled || !this.proactiveReviewService.isRelevantPath(file.path)) return;
+      if (this.proactiveReviewRefreshTimer !== null) {
+        window.clearTimeout(this.proactiveReviewRefreshTimer);
+      }
+      this.proactiveReviewRefreshTimer = window.setTimeout(() => {
+        this.proactiveReviewRefreshTimer = null;
+        void this.runProactiveReviewCheck(false, false);
+      }, 800);
+    }));
+    this.app.workspace.onLayoutReady(() => {
+      void this.maybeShowKnowledgeInitializer();
+      void this.refreshTodayInfo();
+      void this.actionWorkbenchService.initialize().catch((error) => {
+        console.warn('Action workbench initialization failed:', error);
+      });
+      void this.actionReminderService.check().catch((error) => {
+        console.warn('Action reminder check failed:', error);
+      });
+      const timer = window.setTimeout(() => {
+        void this.runDailyProactiveReview();
+        void this.runDailyProactiveInsights();
+      }, 5000);
+      this.register(() => window.clearTimeout(timer));
+      if (this.settings.llmWikiAutoStart) {
+        void this.llmWikiService.start().catch((error) => {
+          console.warn('LLM Wiki startup failed:', error);
+        });
+      }
+    });
+    this.registerInterval(window.setInterval(() => {
+      void this.actionReminderService.check().catch((error) => {
+        console.warn('Action reminder check failed:', error);
+      });
+    }, 60_000));
     if (this.settings.wechatAutoStart) await this.weChatService.start();
   }
 
   async onunload() {
+    if (this.proactiveReviewRefreshTimer !== null) {
+      window.clearTimeout(this.proactiveReviewRefreshTimer);
+      this.proactiveReviewRefreshTimer = null;
+    }
     await this.weChatService?.stop();
+    await this.llmWikiService?.stop();
     // Ensures state is saved even if Obsidian quits without calling onClose()
     for (const view of this.getAllViews()) {
       const tabManager = view.getTabManager();
@@ -271,6 +453,10 @@ export default class ClaudianPlugin extends Plugin {
       await this.openTodayNote();
       return;
     }
+    if (command === 'work-log') {
+      await this.openTodayWorkLog();
+      return;
+    }
     if (command === 'digest') {
       this.openInboxDigest();
       return;
@@ -297,18 +483,360 @@ export default class ClaudianPlugin extends Plugin {
     new SecondBrainOnboardingModal(this.app, this.knowledgeInitializer, 'manual').open();
   }
 
+  openActionWorkbench(initialView?: string): void {
+    new ActionWorkbenchModal(this.app, this, this.actionWorkbenchService, initialView).open();
+  }
+
+  openProactiveReview(): void {
+    this.openProactiveInsights();
+  }
+
+  openProactiveInsights(): void {
+    new MemoryButlerModal(
+      this.app,
+      this,
+      this.actionLifecycleService,
+      this.proactiveReviewService,
+      this.proactiveInsightService,
+      this.actionWorkbenchService,
+      {
+      openSource: async (path) => {
+        if (path) await this.app.workspace.openLinkText(path, '', false);
+      },
+      discussInsight: async (insight) => this.discussInsight(insight),
+      discussAction: async (record) => this.discussActionCandidate(record),
+      discussReview: async (item) => this.startProactiveReview(item),
+      openWorkbench: (view) => this.openActionWorkbench(view),
+      onCountChanged: (count) => this.updateProactiveInsightCount(count),
+      },
+    ).open();
+  }
+
+  getProactiveReviewCount(): number {
+    return this.proactiveReviewCount;
+  }
+
+  getProactiveInsightCount(): number {
+    return this.proactiveInsightCount;
+  }
+
+  async actionLifecycleServiceForButler(): Promise<string[]> {
+    if (this.settings.memoryButlerMode === 'off') return [];
+    const modules = new Set(this.settings.memoryButlerModules);
+    const [lifecycle, review, longTermDue] = await Promise.all([
+      modules.has('action-discovery') || modules.has('progress') ? this.actionLifecycleService.getCenter() : { discoveries: [], progress: [] },
+      modules.has('review') ? this.proactiveReviewService.scan() : { items: [] },
+      this.actionWorkbenchService.getLongTermDue(),
+    ]);
+    const limit = Math.max(1, Math.min(20, this.settings.memoryButlerMaxBriefItems));
+    return [
+      ...longTermDue.map((item) => `${item.title}：${recurrenceLabel(item)}，本次尚未完成。`),
+      ...(modules.has('action-discovery') ? lifecycle.discoveries.map((item) => `${item.title}：还准备继续吗？`) : []),
+      ...(modules.has('progress') ? lifecycle.progress.map((item) => `${item.title}：是否同步这项进度？`) : []),
+      ...(modules.has('review') ? review.items.map((item) => `${item.title}：${item.reason}`) : []),
+    ].slice(0, limit);
+  }
+
+  async proactiveInsightSummaryForButler(): Promise<string[]> {
+    if (this.settings.memoryButlerMode === 'off' || !this.settings.memoryButlerModules.includes('insight')) return [];
+    const center = await this.proactiveInsightService.getCenter('pending');
+    const limit = Math.max(1, Math.min(20, this.settings.memoryButlerMaxBriefItems));
+    return center.items
+      .map((item) => item.observation?.readyForReview
+        ? `${item.title}：待验证经验已达到复盘条件，请决定沉淀、继续观察或放弃。`
+        : `${item.title}：${item.suggestedAction || '需要你确认如何处理'}`)
+      .slice(0, limit);
+  }
+
+  async refreshProactiveInsightCount(): Promise<void> {
+    try {
+      this.updateProactiveInsightCount(await this.proactiveInsightService.getPendingCount());
+    } catch {
+      this.updateProactiveInsightCount(0);
+    }
+  }
+
+  async generateProactiveInsights(forceAll = false, notify = true): Promise<void> {
+    if (!this.settings.proactiveInsightsEnabled && !forceAll) return;
+    try {
+      const result = await this.proactiveInsightService.analyze(forceAll);
+      await this.refreshProactiveInsightCount();
+      if (!notify) return;
+      if (result.baselineEstablished) {
+        const suffix = result.invalidated > 0 ? `；已移出 ${result.invalidated} 条证据失效洞察` : '';
+        new Notice(`记忆管家已建立本地索引${suffix}；首次全库分析请从记忆管家中手动确认。`);
+      } else if (result.generated > 0 || result.observationMatches > 0) {
+        const suffix = result.invalidated > 0 ? `，并移出 ${result.invalidated} 条证据失效洞察` : '';
+        const observations = result.observationMatches > 0 ? `，待验证经验新增 ${result.observationMatches} 条证据` : '';
+        new Notice(`记忆管家发现了 ${result.generated} 条待确认内容${observations}${suffix}。`, 7000);
+      } else if (result.invalidated > 0) {
+        new Notice(`记忆管家未发现新内容，已将 ${result.invalidated} 条证据失效内容移入历史记录。`, 7000);
+      } else {
+        new Notice('本次没有发现证据充分的新洞察。');
+      }
+    } catch (error) {
+      if (notify) {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(`记忆管家分析失败：${message}`, 8000);
+      }
+    }
+  }
+
+  async runProactiveReviewCheck(showResult = false, notify = true): Promise<ReviewScanResult | null> {
+    if (!this.settings.proactiveReviewEnabled && !showResult) return null;
+    try {
+      const modules = new Set(this.settings.memoryButlerModules);
+      const [result, lifecycle, longTermDue] = await Promise.all([
+        modules.has('review') ? this.proactiveReviewService.scan() : {
+          items: [], totalDetected: 0, viewportItems: 0, newCount: 0, scannedAt: new Date().toISOString(),
+        },
+        modules.has('action-discovery') || modules.has('progress') ? this.actionLifecycleService.getCenter() : { discoveries: [], progress: [] },
+        this.actionWorkbenchService.getLongTermDue(),
+      ]);
+      const actionCount = (modules.has('action-discovery') ? lifecycle.discoveries.length : 0)
+        + (modules.has('progress') ? lifecycle.progress.length : 0);
+      const totalDetected = result.totalDetected + actionCount + longTermDue.length;
+      this.updateProactiveReviewCount(totalDetected);
+      if (showResult) {
+        this.openProactiveReview();
+      } else if (notify && totalDetected > 0 && this.settings.proactiveReviewStartupNotice) {
+        new Notice(`行动工作台和记忆管家有 ${totalDetected} 项待处理，点击铃铛图标查看。`, 7000);
+      }
+      return { ...result, totalDetected };
+    } catch (error) {
+      if (showResult) {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(`行动与复盘检查失败：${message}`);
+      }
+      return null;
+    }
+  }
+
+  private async runDailyProactiveReview(): Promise<void> {
+    if (!this.settings.proactiveReviewEnabled || this.settings.memoryButlerMode === 'off') return;
+    if (!(await this.proactiveReviewService.shouldRunDaily())) {
+      await this.runProactiveReviewCheck(false, false);
+      return;
+    }
+    await this.runProactiveReviewCheck(false, this.settings.memoryButlerMode !== 'quiet');
+  }
+
+  private async runDailyProactiveInsights(): Promise<void> {
+    if (!this.settings.proactiveInsightsEnabled || this.settings.memoryButlerMode === 'off'
+      || !this.settings.memoryButlerModules.includes('insight')) return;
+    try {
+      if (this.settings.memoryButlerMode === 'quiet') {
+        await this.refreshProactiveInsightCount();
+        return;
+      }
+      const shouldAnalyze = await this.proactiveInsightService.shouldAutoAnalyze();
+      if (shouldAnalyze && await this.proactiveInsightService.claimAutomaticAttempt()) {
+        const result = await this.proactiveInsightService.analyze(false);
+        await this.refreshProactiveInsightCount();
+        if ((result.generated > 0 || result.observationMatches > 0) && this.settings.proactiveInsightsStartupNotice) {
+          const observations = result.observationMatches > 0 ? `，并为待验证经验补充 ${result.observationMatches} 条证据` : '';
+          new Notice(`记忆管家发现 ${result.generated} 条新内容${observations}，点击铃铛图标查看。`, 7000);
+        }
+      } else {
+        await this.refreshProactiveInsightCount();
+      }
+    } catch (error) {
+      console.warn('Automatic insight analysis failed; inspect .second-brain/analysis-jobs:', error);
+    }
+  }
+
+  private updateProactiveReviewCount(count: number): void {
+    this.proactiveReviewCount = Math.max(0, count);
+    if (this.proactiveReviewRibbonEl) {
+      this.proactiveReviewRibbonEl.dataset.reviewCount = String(this.proactiveReviewCount);
+      this.proactiveReviewRibbonEl.setAttribute(
+        'aria-label',
+        this.proactiveReviewCount > 0 ? `行动工作台，${this.proactiveReviewCount} 项待处理` : '行动工作台',
+      );
+    }
+    for (const view of this.getAllViews()) {
+      view.updateProactiveReviewCount(this.proactiveReviewCount);
+    }
+  }
+
+  private updateProactiveInsightCount(count: number): void {
+    this.proactiveInsightCount = Math.max(0, count);
+    if (this.proactiveInsightRibbonEl) {
+      this.proactiveInsightRibbonEl.dataset.insightCount = String(this.proactiveInsightCount);
+      this.proactiveInsightRibbonEl.setAttribute(
+        'aria-label',
+        this.proactiveInsightCount > 0
+          ? `记忆管家，${this.proactiveInsightCount} 条待确认`
+          : '记忆管家',
+      );
+    }
+    for (const view of this.getAllViews()) {
+      view.updateProactiveInsightCount(this.proactiveInsightCount);
+    }
+  }
+
+  private async startProactiveReview(item: ReviewItem): Promise<void> {
+    const tab = await this.waitForActiveTab();
+    if (!tab?.controllers.inputController) {
+      new Notice('知识演化面板尚未准备好，请稍后重试。');
+      return;
+    }
+    const prompt = [
+      '请对下面这项主动复盘提醒进行深入分析。',
+      `类型：${item.kind}`,
+      `事项：${item.title}`,
+      `检测原因：${item.reason}`,
+      `依据：${item.evidence}`,
+      `来源：${item.sourcePath}`,
+      '',
+      '请先核对来源笔记，再区分事实、推断和需要我决定的部分。',
+      '给出继续、调整、暂停或结束的建议，以及一个可以直接开始的下一步。',
+      '现在只输出复盘建议，不修改任何笔记；需要写入时先列出修改内容并等待我确认。',
+    ].join('\n');
+    await tab.controllers.inputController.sendMessage({ content: prompt });
+  }
+
+  private async discussActionCandidate(record: ActionLifecycleRecord): Promise<void> {
+    const tab = await this.waitForActiveTab();
+    if (!tab?.controllers.inputController) {
+      new Notice('知识演化面板尚未准备好，请稍后重试。');
+      return;
+    }
+    this.settings.codexPerformanceMode = 'deep';
+    try {
+      this.settings.codexModel = getConfiguredModel(this.settings, 'deep');
+    } catch {
+      this.settings.codexModel = '';
+    }
+    const supportsReasoning = (this.settings.codexModelProvider ?? 'codex') === 'codex'
+      || this.settings.codexProviderSupportsReasoning;
+    this.settings.codexReasoningEffort = supportsReasoning
+      ? CODEX_PERFORMANCE_PROFILES.deep.reasoningEffort
+      : '';
+    this.settings.codexPlanModeReasoningEffort = this.settings.codexReasoningEffort;
+    await this.saveSettings();
+    updateTabBackendUI(tab, this);
+    const prompt = [
+      '请与我深入讨论下面这条行动与复盘候选。',
+      `类型：${record.category === 'discovery' ? '遗漏事项' : '进度同步'}`,
+      `标题：${record.title}`,
+      `模型判断：${record.summary}`,
+      `判断理由：${record.rationale}`,
+      `置信度：${Math.round(record.confidence * 100)}%`,
+      `来源：${record.evidence.sourcePath}:${record.evidence.sourceLine}`,
+      `原文：${record.evidence.quote}`,
+      record.matchedActionId ? `匹配行动：${record.matchedActionId}` : '',
+      record.matchedProjectPath ? `匹配项目：${record.matchedProjectPath}` : '',
+      '',
+      '请先打开并核对来源与相关行动文件，判断它是否仍然有效，是否已被后续记录解决或替代。',
+      '区分事实、推断和需要我决定的部分，并给出继续、调整、延后、保留灵感或放弃的建议。',
+      '现在只讨论，不修改笔记；需要写入时列出精确修改并等待我确认。',
+    ].filter(Boolean).join('\n');
+    await tab.controllers.inputController.sendMessage({ content: prompt });
+  }
+
+  private async discussInsight(insight: InsightRecord): Promise<void> {
+    const tab = await this.waitForActiveTab();
+    if (!tab?.controllers.inputController) {
+      new Notice('知识演化面板尚未准备好，请稍后重试。');
+      return;
+    }
+    this.settings.codexPerformanceMode = 'deep';
+    try {
+      this.settings.codexModel = getConfiguredModel(this.settings, 'deep');
+    } catch {
+      this.settings.codexModel = '';
+    }
+    const supportsReasoning = (this.settings.codexModelProvider ?? 'codex') === 'codex'
+      || this.settings.codexProviderSupportsReasoning;
+    this.settings.codexReasoningEffort = supportsReasoning
+      ? CODEX_PERFORMANCE_PROFILES.deep.reasoningEffort
+      : '';
+    this.settings.codexPlanModeReasoningEffort = this.settings.codexReasoningEffort;
+    await this.saveSettings();
+    updateTabBackendUI(tab, this);
+    const evidence = insight.evidence
+      .map((item) => `- ${item.sourcePath}：${item.quote}`)
+      .join('\n');
+    const prompt = [
+      '请与我讨论下面这条主动洞察。',
+      `类型：${this.proactiveInsightService.getKindLabel(insight.kind)}`,
+      `标题：${insight.title}`,
+      `核心判断：${insight.summary}`,
+      `触发原因：${insight.rationale}`,
+      `反证与边界：${insight.counterEvidence || '尚未确认'}`,
+      `建议下一步：${insight.suggestedAction || '尚未形成'}`,
+      '证据：',
+      evidence,
+      '',
+      '请先打开并核对列出的来源笔记，再区分已确认事实、合理推断、反证和仍需我决定的部分。',
+      '不要把单次记录固化为人格或长期画像。现在只讨论和提出修改建议，不写入任何笔记。',
+    ].join('\n');
+    await tab.controllers.inputController.sendMessage({ content: prompt });
+  }
+
+  private createDecisionFromInsight(insight: InsightRecord): void {
+    new DecisionCreateModal(
+      this.app,
+      this.proactiveReviewService,
+      (decisionId) => {
+        void this.proactiveInsightService.markDecisionConverted(insight.id, decisionId);
+        void this.runProactiveReviewCheck(false, false);
+        void this.refreshProactiveInsightCount();
+      },
+      {
+        title: insight.title,
+        background: insight.summary,
+        rationale: [
+          insight.rationale,
+          ...insight.evidence.map((item) => `${item.sourcePath}：${item.quote}`),
+        ].filter(Boolean).join('\n'),
+        expectedResult: insight.suggestedAction,
+      },
+    ).open();
+  }
+
   private async maybeShowKnowledgeInitializer(): Promise<void> {
     if (await this.knowledgeInitializer.getStatus() !== 'pending') return;
     if (await this.knowledgeInitializer.markCompletedIfReady()) return;
     new SecondBrainOnboardingModal(this.app, this.knowledgeInitializer, 'first-run').open();
   }
 
-  async openTodayNote(): Promise<void> {
+  async openTodayNote(): Promise<string | null> {
     const commands = (this.app as any).commands;
     const executed = commands?.executeCommandById?.('daily-notes');
     if (executed instanceof Promise) await executed;
-    if (executed !== false) return;
+    if (executed !== false) {
+      for (let attempt = 0; attempt < 10 && !this.dailyNoteInfoService.findTodayFile(); attempt++) {
+        await new Promise((resolve) => window.setTimeout(resolve, 25));
+      }
+      await this.refreshTodayInfo();
+      return this.dailyNoteInfoService.findTodayFile()?.path ?? null;
+    }
     new Notice('每日笔记核心功能未启用，请在 Obsidian 设置 → 核心插件中启用“每日笔记”。');
+    return null;
+  }
+
+  async openTodayWorkLog(): Promise<string> {
+    const result = await this.workLogService.openOrCreate();
+    if (result.created) new Notice('已创建今天的工作日志。');
+    return result.path;
+  }
+
+  async ensureWeChatConversationTab(conversationId: string): Promise<void> {
+    for (const view of this.getAllViews()) {
+      await view.getTabManager()?.ensureFixedConversationTab(conversationId, '微信会话');
+    }
+  }
+
+  async syncConversationViews(conversationId: string): Promise<void> {
+    for (const view of this.getAllViews()) {
+      await view.getTabManager()?.refreshConversation(conversationId);
+    }
+  }
+
+  async refreshTodayInfo(): Promise<void> {
+    await this.dailyNoteInfoService.ensureTodayInfo();
   }
 
   private async focusCaptureInput(): Promise<void> {
@@ -336,12 +864,23 @@ export default class ClaudianPlugin extends Plugin {
     const { claudian } = await this.storage.initialize();
 
     const slashCommands = await this.storage.loadAllSlashCommands();
+    const hadLegacyDailyInfoZodiac = 'dailyInfoZodiacSign' in claudian;
+    let didMigrateActionWorkbenchViews = false;
 
     this.settings = {
       ...DEFAULT_SETTINGS,
       ...claudian,
       slashCommands,
     };
+    delete (this.settings as unknown as Record<string, unknown>).dailyInfoZodiacSign;
+
+    for (const view of ['long-term', 'inbox', 'planned']) {
+      if (this.settings.actionWorkbenchViewOrder.includes(view)) continue;
+      const previous = view === 'long-term' ? 'today' : view === 'inbox' ? 'long-term' : 'inbox';
+      const previousIndex = this.settings.actionWorkbenchViewOrder.indexOf(previous);
+      this.settings.actionWorkbenchViewOrder.splice(previousIndex >= 0 ? previousIndex + 1 : 0, 0, view);
+      didMigrateActionWorkbenchViews = true;
+    }
 
     this.settings.defaultBackend = BACKEND_CODEX;
     this.settings.locale = 'zh-CN';
@@ -456,7 +995,7 @@ export default class ClaudianPlugin extends Plugin {
     this.runtimeEnvironmentVariables = this.settings.environmentVariables || '';
     const { changed, invalidatedConversations } = this.reconcileModelWithEnvironment(this.runtimeEnvironmentVariables);
 
-    if (changed || didMigrateCliPath) {
+    if (changed || didMigrateCliPath || hadLegacyDailyInfoZodiac || didMigrateActionWorkbenchViews) {
       await this.saveSettings();
     }
 
@@ -513,6 +1052,7 @@ export default class ClaudianPlugin extends Plugin {
       'lastClaudeModel',
       'lastCustomModel',
       'titleGenerationModel',
+      'dailyInfoZodiacSign',
     ]) {
       delete runtimeSettings[legacyKey];
     }
@@ -1009,11 +1549,17 @@ export default class ClaudianPlugin extends Plugin {
    * Creates a new conversation and sets it as active.
    *
    * Backends with native history support store metadata only; backends without
-   * native history are persisted as JSONL from the start.
+   * native history are persisted as JSONL from the start. Fixed integration
+   * conversations can opt into JSONL so plugin-generated status messages persist.
    */
-  async createConversation(sessionId?: string, backendId: BackendId = this.settings.defaultBackend): Promise<Conversation> {
+  async createConversation(
+    sessionId?: string,
+    backendId: BackendId = this.settings.defaultBackend,
+    options: { forceLegacyStorage?: boolean } = {},
+  ): Promise<Conversation> {
     const conversationId = sessionId ?? this.generateConversationId();
-    const supportsNativeHistory = getBackendCapabilities(backendId).supportsNativeHistory;
+    const supportsNativeHistory = getBackendCapabilities(backendId).supportsNativeHistory
+      && !options.forceLegacyStorage;
     const conversation: Conversation = {
       backendId,
       id: conversationId,
@@ -1148,6 +1694,17 @@ export default class ClaudianPlugin extends Plugin {
           }
         }
       }
+    }
+  }
+
+  async persistConversationMessagesInPlugin(id: string): Promise<void> {
+    const conversation = await this.getConversationById(id);
+    if (!conversation || !conversation.isNative) return;
+    conversation.isNative = undefined;
+    conversation.sdkMessagesLoaded = undefined;
+    await this.storage.sessions.saveConversation(conversation);
+    if (await this.storage.sessions.loadMetadata(id)) {
+      await this.storage.sessions.deleteMetadata(id);
     }
   }
 

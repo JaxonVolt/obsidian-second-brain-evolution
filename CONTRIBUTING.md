@@ -2,7 +2,7 @@
 
 ## 开发环境
 
-- Node.js 20 或 22
+- Node.js 24
 - npm
 - Obsidian 桌面端
 
@@ -14,6 +14,7 @@ npm run typecheck
 npm run lint
 npm test
 npm run build
+npm run check:public
 ```
 
 `npm test` 运行当前公开版的核心回归测试。`npm run test:all` 会额外运行继承自上游的历史兼容测试，其中部分断言仍对应旧英文界面、旧存储路径和旧引擎行为，正在逐步迁移。

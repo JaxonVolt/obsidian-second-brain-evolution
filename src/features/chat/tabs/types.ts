@@ -34,12 +34,10 @@ import type { NavigationSidebar } from '../ui';
 /**
  * Default number of tabs allowed.
  *
- * Set to 3 to balance usability with resource usage:
- * - Each tab has its own AgentSessionService and persistent query
- * - More tabs = more memory and potential SDK processes
- * - 3 tabs allows multi-tasking without excessive overhead
+ * Services remain lazy until a tab sends its first message, so the UI can
+ * expose the full supported workspace without starting ten sessions at once.
  */
-export const DEFAULT_MAX_TABS = 3;
+export const DEFAULT_MAX_TABS = 10;
 
 /**
  * Minimum number of tabs allowed (settings floor).
@@ -182,6 +180,12 @@ export interface TabData {
   /** Conversation ID bound to this tab (null for new/empty tabs). */
   conversationId: string | null;
 
+  /** Optional user-defined label, including for empty tabs. */
+  customTitle?: string;
+
+  /** Runtime-only fixed title for protected system tabs such as the WeChat mirror. */
+  fixedTitle?: string;
+
   /** Per-tab AgentSessionService instance for independent streaming. */
   service: AgentSessionService | null;
 
@@ -213,6 +217,7 @@ export interface TabData {
 export interface PersistedTabState {
   tabId: TabId;
   conversationId: string | null;
+  customTitle?: string;
 }
 
 /**
@@ -261,4 +266,5 @@ export interface TabBarItem {
   isStreaming: boolean;
   needsAttention: boolean;
   canClose: boolean;
+  canRename?: boolean;
 }

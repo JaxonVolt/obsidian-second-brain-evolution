@@ -30,6 +30,9 @@ const CATEGORY_ALIASES: Record<string, RoutingCategory> = {
   输出与作品: 'output',
   输出: 'output',
   归档: 'archive',
+  仅留原始记录: 'retain',
+  仅保留原始记录: 'retain',
+  仅保留: 'retain',
   暂留收件箱: 'inbox',
   收件箱: 'inbox',
 };
@@ -43,6 +46,7 @@ const CATEGORY_LABELS: Record<RoutingCategory, string> = {
   permanent: '永久笔记',
   output: '输出与作品',
   archive: '归档',
+  retain: '仅留原始记录',
   inbox: '暂留收件箱',
 };
 
@@ -84,7 +88,9 @@ function compact(value: string, maxLength: number): string {
 }
 
 export function formatDigestProposal(proposal: RoutingProposal, index: number): string {
-  const state = proposal.selected && proposal.category !== 'inbox' ? '归位' : '暂留';
+  const state = proposal.category === 'retain' && proposal.selected
+    ? '留原始'
+    : proposal.selected && proposal.category !== 'inbox' ? '归位' : '暂留';
   return `${index}. [${state}][${CATEGORY_LABELS[proposal.category]}] ${compact(proposal.title, 36)}\n${compact(proposal.content, 140)}`;
 }
 

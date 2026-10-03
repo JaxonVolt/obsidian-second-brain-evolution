@@ -31,6 +31,7 @@ export const CLAUDIAN_ONLY_FIELDS = new Set([
   'excludedTags',
   'mediaFolder',
   'systemPrompt',
+  'wechatAdditionalInstructions',
   'allowedExportPaths',
   'persistentExternalContextPaths',
 
@@ -71,6 +72,7 @@ export const MIGRATABLE_CLAUDIAN_FIELDS = new Set([
   'excludedTags',
   'mediaFolder',
   'systemPrompt',
+  'wechatAdditionalInstructions',
   'allowedExportPaths',
   'persistentExternalContextPaths',
   'environmentVariables',

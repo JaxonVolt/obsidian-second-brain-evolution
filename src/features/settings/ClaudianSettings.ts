@@ -274,14 +274,14 @@ export class ClaudianSettingTab extends PluginSettingTab {
     maxTabsSetting.addSlider((slider) => {
       slider
         .setLimits(3, 10, 1)
-        .setValue(this.plugin.settings.maxTabs ?? 3)
+        .setValue(this.plugin.settings.maxTabs ?? 10)
         .setDynamicTooltip()
         .onChange(async (value) => {
           this.plugin.settings.maxTabs = value;
           await this.plugin.saveSettings();
           updateMaxTabsWarning(value);
         });
-      updateMaxTabsWarning(this.plugin.settings.maxTabs ?? 3);
+      updateMaxTabsWarning(this.plugin.settings.maxTabs ?? 10);
     });
   }
 

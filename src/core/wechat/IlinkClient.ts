@@ -161,7 +161,7 @@ export class IlinkClient {
       },
     });
     if (response.ret && response.ret !== 0) {
-      throw new IlinkApiError(`微信回复失败：${response.errmsg ?? response.ret}`);
+      throw new IlinkApiError(`微信回复失败：${response.errmsg || response.ret}`, response.ret);
     }
   }
 

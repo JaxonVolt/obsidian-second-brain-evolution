@@ -154,6 +154,22 @@ describe('StreamController - Text Content', () => {
   });
 
   describe('Text streaming', () => {
+    it('normalizes completed note references before display and block persistence', async () => {
+      const file = { path: '资料/使用指南.md', name: '使用指南.md', basename: '使用指南', extension: 'md' };
+      Object.assign(deps.plugin.app.vault, {
+        getFiles: jest.fn(() => [file]),
+        getFileByPath: jest.fn((path: string) => path === file.path ? file : null),
+      });
+      const msg = createTestMessage();
+      await controller.handleStreamChunk({ type: 'text', content: '请读 使用' }, msg);
+      await controller.handleStreamChunk({ type: 'text', content: '指南。' }, msg);
+      const expected = '请读 [[资料/使用指南|使用指南]]。';
+      expect(deps.renderer.renderContent).toHaveBeenLastCalledWith(expect.anything(), expected);
+      controller.finalizeCurrentTextBlock(msg);
+      expect(msg.contentBlocks).toContainEqual({ type: 'text', content: expected });
+      expect(deps.renderer.addTextCopyButton).toHaveBeenLastCalledWith(expect.anything(), expected);
+    });
+
     it('should append text content to message', async () => {
       const msg = createTestMessage();
 

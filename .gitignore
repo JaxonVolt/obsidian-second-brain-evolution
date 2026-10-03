@@ -91,6 +91,7 @@ release/
 
 # Test artifacts
 test-results/
+.test-output/
 
 # Development files
 sandbox/

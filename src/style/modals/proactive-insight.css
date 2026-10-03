@@ -1,0 +1,328 @@
+.second-brain-insight-modal {
+  width: min(780px, calc(100vw - 32px));
+}
+
+.second-brain-insight-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.second-brain-insight-loading,
+.second-brain-insight-empty {
+  min-height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.second-brain-insight-loading svg {
+  animation: claudian-spin 1s linear infinite;
+}
+
+.second-brain-insight-empty svg {
+  width: 28px;
+  height: 28px;
+  color: var(--color-yellow);
+}
+
+.second-brain-insight-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 2px;
+}
+
+.second-brain-insight-status {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.second-brain-insight-status span,
+.second-brain-insight-footer {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-insight-toolbar-actions,
+.second-brain-insight-card-actions,
+.second-brain-insight-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.second-brain-insight-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.second-brain-insight-tabs button {
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px 4px 0 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.second-brain-insight-tabs button.is-active {
+  border-bottom-color: var(--interactive-accent);
+  color: var(--text-normal);
+}
+
+.second-brain-insight-list {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+  padding-right: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.second-brain-insight-card {
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--color-yellow);
+  border-radius: 6px;
+  padding: 14px;
+  background: var(--background-primary);
+}
+
+.second-brain-insight-card.status-accepted {
+  border-left-color: var(--color-green);
+}
+
+.second-brain-insight-card.status-snoozed {
+  border-left-color: var(--color-blue);
+}
+
+.second-brain-insight-card.status-dismissed,
+.second-brain-insight-card.status-converted {
+  border-left-color: var(--text-faint);
+}
+
+.second-brain-insight-card.status-invalidated {
+  border-left-color: var(--color-red);
+}
+
+.second-brain-insight-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.second-brain-insight-card-header strong {
+  overflow-wrap: anywhere;
+}
+
+.second-brain-insight-labels {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.second-brain-insight-kind,
+.second-brain-insight-confidence,
+.second-brain-insight-invalid-label {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-insight-invalid-label {
+  color: var(--text-error);
+}
+
+.second-brain-insight-summary {
+  margin-top: 10px;
+  color: var(--text-normal);
+  line-height: 1.55;
+}
+
+.second-brain-insight-rationale,
+.second-brain-insight-counter,
+.second-brain-insight-action-text {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.5;
+}
+
+.second-brain-insight-counter {
+  padding-left: 8px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+.second-brain-insight-invalidated {
+  margin-top: 8px;
+  padding: 8px;
+  border-left: 2px solid var(--color-red);
+  background: var(--background-secondary);
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.5;
+}
+
+.second-brain-insight-evidence-toggle {
+  margin-top: 10px;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-insight-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.second-brain-insight-evidence-row {
+  padding: 8px;
+  border-radius: 4px;
+  background: var(--background-secondary);
+}
+
+.second-brain-insight-evidence-row.is-invalid {
+  border: 1px solid var(--background-modifier-error);
+}
+
+.second-brain-insight-evidence-row.is-invalid button,
+.second-brain-insight-evidence-row.is-invalid button:disabled {
+  color: var(--text-error);
+  opacity: 1;
+}
+
+.second-brain-insight-evidence-row button {
+  max-width: 100%;
+  height: auto;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smaller);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.second-brain-insight-evidence-row blockquote {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.second-brain-insight-card-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-top: 12px;
+}
+
+.second-brain-insight-card-actions button,
+.second-brain-insight-card-actions select {
+  min-height: 30px;
+}
+
+.second-brain-insight-footer {
+  padding-top: 2px;
+}
+
+.second-brain-insight-error {
+  color: var(--text-error);
+}
+
+.second-brain-insight-edit-modal {
+  width: min(640px, calc(100vw - 32px));
+}
+
+.second-brain-insight-intro {
+  margin-top: 0;
+  color: var(--text-muted);
+}
+
+.second-brain-insight-edit-modal .setting-item {
+  align-items: flex-start;
+}
+
+.second-brain-insight-edit-modal input,
+.second-brain-insight-edit-modal textarea {
+  width: min(380px, 100%);
+}
+
+.second-brain-insight-edit-modal textarea {
+  resize: vertical;
+}
+
+.claudian-insight-btn {
+  position: relative;
+}
+
+.claudian-insight-count {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border: 2px solid var(--background-primary);
+  border-radius: 8px;
+  background: var(--color-yellow);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.second-brain-insight-ribbon[data-insight-count]:not([data-insight-count="0"])::after {
+  content: attr(data-insight-count);
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  background: var(--color-yellow);
+  color: var(--text-on-accent);
+  font-size: 9px;
+  line-height: 14px;
+  text-align: center;
+}
+
+@media (max-width: 620px) {
+  .second-brain-insight-toolbar,
+  .second-brain-insight-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .second-brain-insight-toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .second-brain-insight-card-actions > * {
+    flex: 1 1 auto;
+  }
+}

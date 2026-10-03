@@ -31,6 +31,21 @@ describe('systemPrompt', () => {
       expect(prompt).toContain('# User Message Format');
     });
 
+    it('should enforce the daily log organization contract', () => {
+      const prompt = buildSystemPrompt();
+
+      expect(prompt).toContain('# Daily Log Organization Contract');
+      expect(prompt).toContain('Do not ask the user to choose between read-only analysis and in-place organization');
+      expect(prompt).toContain('the four list items under "沉淀与回流"');
+      expect(prompt).toContain('100_领域与职责/140_工作日志');
+      expect(prompt).toContain('"加入行动工作台", "更新技能或项目", "值得单独整理的故障", and "其他可复用内容"');
+      expect(prompt).toContain('Do not merge same-date files');
+      expect(prompt).toContain('In work logs, also never alter');
+      expect(prompt).toContain('never leave a routing item blank');
+      expect(prompt).toContain('Do not create a monthly index');
+      expect(prompt).toContain('zero other changes');
+    });
+
     it('should include allowed export paths instructions when configured', () => {
       const prompt = buildSystemPrompt({ allowedExportPaths: ['~/Desktop', '/tmp'] });
       expect(prompt).toContain('# Allowed Export Paths');
