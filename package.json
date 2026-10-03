@@ -19,7 +19,7 @@
     "test:coverage": "node scripts/run-jest.js --coverage",
     "version": "node scripts/sync-version.js && git add manifest.json",
     "check:public": "node scripts/check-public.mjs",
-    "test:public": "node scripts/run-jest.js --runInBand tests/unit/public tests/unit/core/knowledge/VaultSearchIndex.test.ts tests/unit/utils/vaultNoteLinks.test.ts"
+    "test:public": "node scripts/run-jest.js --runInBand tests/unit/public tests/unit/core/knowledge/VaultSearchIndex.test.ts tests/unit/utils/vaultNoteLinks.test.ts tests/unit/core/wechat/ButlerDelivery.test.ts tests/unit/core/commands/conversationCommandResolver.test.ts tests/unit/utils/boundedHistory.test.ts"
   },
   "keywords": [
     "codex",

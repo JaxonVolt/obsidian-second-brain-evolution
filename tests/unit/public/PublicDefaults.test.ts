@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
+import type { App } from 'obsidian';
 import * as path from 'path';
 
+import { resolveDailyNote } from '@/core/knowledge/DailyNotePath';
 import { isAbsoluteWikiPath, resolveWikiEvidencePath } from '@/core/knowledge/LlmWikiService';
-import { SECOND_BRAIN_PATHS, SKELETON_FILES } from '@/core/knowledge/SecondBrainInitializer';
+import { SECOND_BRAIN_PATHS, SecondBrainInitializer, SKELETON_FILES } from '@/core/knowledge/SecondBrainInitializer';
 import { DEFAULT_SETTINGS } from '@/core/types';
 
 describe('public distribution defaults and path boundary', () => {
@@ -50,6 +52,24 @@ describe('public distribution defaults and path boundary', () => {
     const command = KNOWLEDGE_COMMANDS.find((item) => item.name === 'current-status')!;
     expect(command.content).toContain('不依赖额外Skill');
     expect(command.content).toContain('不修改任何文件');
+  });
+
+  it('resolves a complete daily log immediately after empty-vault initialization', async () => {
+    const files = new Map<string, string>();
+    const folders = new Set<string>();
+    const app = { vault: { adapter: {
+      exists: async (file: string) => files.has(file) || folders.has(file),
+      read: async (file: string) => files.get(file) ?? '',
+      write: async (file: string, content: string) => { files.set(file, content); },
+      mkdir: async (folder: string) => { folders.add(folder); },
+    } } } as unknown as App;
+    await new SecondBrainInitializer(app).initialize();
+    const result = await resolveDailyNote(app, new Date(2026, 9, 3));
+    expect(result.path).toBe('300_复盘与日志/310_每日笔记/2026-10/2026-10-03.md');
+    expect(result.initial).toContain('# 2026-10-03');
+    expect(result.initial).toContain('## 今天做了什么');
+    expect(result.initial).toContain('- 可以发展成输出：');
+    expect(result.initial).not.toContain('{{date}}');
   });
 
   it('the distributable metadata matches the maintained version', async () => {
